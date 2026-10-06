@@ -13,22 +13,72 @@
       <div id="hud">
         <div id="alive">Alive: 6</div>
         <div id="kills">Kills: 0</div>
+        <div id="room-chip" hidden></div>
       </div>
       <div id="feed"></div>
       <div id="banner"></div>
 
       <div id="overlay">
-        <div class="panel">
-          <h1 id="ov-title">Last One Standing</h1>
-          <p id="ov-text">
-            You vs. 5 bots. One shot kills anyone, so be the last one alive.<br />
-            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim
-            &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>R</b> restart
+        <!-- Main menu -->
+        <div class="panel" id="menu-panel">
+          <h1>Last One Standing</h1>
+          <p class="lede">
+            Tank battle for up to 6 players. Empty slots are filled with bots.
+            One shot destroys any tank, so be the last one left.
           </p>
-          <button id="play">Play</button>
+          <p class="controls">
+            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot
+          </p>
+
+          <label class="field" for="name">
+            <span>Your name</span>
+            <input id="name" type="text" maxlength="14" autocomplete="nickname" placeholder="Player" />
+          </label>
+
+          <div class="actions">
+            <button id="create" class="primary">Create online match</button>
+            <div class="join-row">
+              <input id="code" type="text" maxlength="5" placeholder="Room code" autocomplete="off" spellcheck="false" aria-label="Room code" />
+              <button id="join">Join</button>
+            </div>
+            <button id="solo" class="ghost">Play solo vs bots</button>
+          </div>
+          <p id="menu-status" class="status" role="status"></p>
+        </div>
+
+        <!-- Lobby -->
+        <div class="panel" id="lobby-panel" hidden>
+          <h2>Match lobby</h2>
+          <div class="room">
+            <span class="room-label">Room code</span>
+            <span id="room-code" class="room-code"></span>
+          </div>
+          <div class="invite">
+            <input id="invite-link" type="text" readonly aria-label="Invite link" />
+            <button id="copy-link">Copy invite link</button>
+          </div>
+          <ul id="player-list"></ul>
+          <p id="lobby-hint" class="status"></p>
+          <div class="actions row">
+            <button id="start" class="primary">Start match</button>
+            <button id="leave" class="ghost">Leave</button>
+          </div>
+        </div>
+
+        <!-- End of round -->
+        <div class="panel" id="end-panel" hidden>
+          <h1 id="end-title"></h1>
+          <p id="end-text"></p>
+          <p id="end-wait" class="status">Waiting for the host to start the next round…</p>
+          <div class="actions row">
+            <button id="again" class="primary">Play again</button>
+            <button id="end-leave" class="ghost">Leave</button>
+          </div>
         </div>
       </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script src="net.js"></script>
     <script src="game.js"></script>
   </body>
 </html>

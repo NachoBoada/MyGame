@@ -1,15 +1,30 @@
 # Last One Standing
 
-A top-down arena shooter that runs in the browser. You play against 5 bots. One bullet kills anyone, bots included, and the last one alive wins the round.
+A top-down tank battle that runs in the browser. Up to 6 players can play online together, and bots fill any empty slots. One shot destroys any tank, and the last tank left wins the round.
 
-**Play online:** https://claude.ai/artifact/MosyweTYeD6tGjikwuag8K
+**Play:** https://nachoboada.github.io/MyGame/
+
+## Play with friends
+
+1. One person opens the game, types a name and clicks **Create online match**. That person is the **host**.
+2. The lobby shows a 5-character **room code**. The host sends friends the code, or clicks **Copy invite link** and sends the link.
+3. Each friend opens the game, types a name, enters the code and clicks **Join**. Opening the invite link fills in the code for them.
+4. When everyone is in the lobby, the host clicks **Start match**. Bots take any of the 6 slots that players haven't filled.
+5. When a round ends, the host clicks **Play again** to start the next one. Anyone who joined during a round watches it and plays from the next round.
+
+You can also click **Play solo vs bots** to play alone against 5 bots, with no internet connection needed.
+
+### Things to know about online play
+
+- **The host's browser runs the match.** If the host closes the tab or leaves, the match ends for everyone. The host should also keep the game tab open and in view, because browsers pause pages that aren't visible, and that freezes the match for all players.
+- **Players connect directly to the host.** The game uses [PeerJS](https://peerjs.com/), and the free PeerJS server only introduces players to each other. Some strict networks (some workplaces, schools and mobile hotspots) block direct connections. If a friend can't join, try another network or let someone else host.
+- **Lag depends on the connection to the host.** Other tanks are smoothed between updates, so on a slow connection they may move slightly behind where they really are.
 
 ## How to play
 
-1. Open the game and click **Play**.
-2. A 3-2-1 countdown runs. Nobody can move or shoot until it ends.
-3. Shoot the bots, and use the walls as cover. Bots fight each other too.
-4. Be the last one alive.
+1. A 3-2-1 countdown runs at the start of each round. Tanks can aim, but not move or shoot, until it ends.
+2. Shoot the other tanks, and use the walls as cover. Bots fight everyone, including each other.
+3. Be the last tank left.
 
 ### Controls
 
@@ -18,48 +33,56 @@ A top-down arena shooter that runs in the browser. You play against 5 bots. One 
 | Move    | `W` `A` `S` `D` or arrow keys |
 | Aim     | Mouse                   |
 | Shoot   | Left click (hold to keep firing) |
-| Restart | `R`                     |
+| Restart | `R` (solo only)         |
 
 You need a keyboard and mouse. There are no touch controls, so the game doesn't work on phones or tablets.
 
-### Rules and tips
+### The tanks
 
-- **One shot kills.** This applies to you and to every bot.
-- **Walls block bullets and sight.** A bot only shoots at someone it can see, so breaking line of sight keeps you safe.
+Each of the 6 slots has its own tank. Players take slots in the order they joined, so the host always drives the green tank. Your own tank has a white star on its rear deck and **YOU** above it.
+
+| Slot | Colour | Design |
+| ---- | ------ | ------ |
+| 1 (host) | Green  | Medium tank |
+| 2    | Red    | Heavy tank with a box turret |
+| 3    | Sand   | Small light tank |
+| 4    | Purple | Twin-barrel tank |
+| 5    | Blue   | Tank destroyer with a low, wedge-shaped turret |
+| 6    | Grey   | Long-barrel tank |
+
+The designs only change how the tanks look. Every tank is destroyed by a single shot, and every player tank moves at the same speed. A destroyed tank leaves a burnt-out wreck that you can drive over.
+
+### Tips
+
+- **Walls block bullets and sight.** A bot only shoots at tanks it can see, so breaking line of sight keeps you safe from bots.
 - **Bots take a moment to react** when they first spot you. Shooting first usually wins.
-- **Keep moving.** Bots aim slightly ahead of moving targets, but they aren't perfect, and each bot has its own accuracy.
-- **Let the bots thin each other out.** The kill feed in the top-right shows who eliminated whom.
-- **If you die,** you watch the rest of the round. Press `R` to start a new one right away.
+- **Keep moving.** Bots aim slightly ahead of moving targets, but they aren't perfect.
+- **Let the others thin each other out.** The kill feed in the top-right shows who destroyed whom.
 
-The **Alive** and **Kills** counters are in the top-left corner.
+The **Alive** and **Kills** counters and the room code are in the top-left corner.
+
+## Hosting on GitHub Pages
+
+The game is plain HTML, CSS and JavaScript, so GitHub Pages can serve it as is. To turn it on:
+
+1. Open the repository on GitHub and go to **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Choose the `main` branch and the `/ (root)` folder, then click **Save**.
+
+After a minute or two the game is live at https://nachoboada.github.io/MyGame/. Every push to `main` updates it.
 
 ## Run it locally
 
-You don't need to install anything. Open `index.html` in any modern browser (Chrome, Edge, Firefox or Safari).
-
-## Share it with friends
-
-The online version is hosted as a claude.ai Artifact and is **private by default**. Before your friends can open it:
-
-1. Open the [game link](https://claude.ai/artifact/MosyweTYeD6tGjikwuag8K).
-2. Open the **Share** menu on the page.
-3. Make the page viewable by anyone with the link.
-4. Send them the link.
-
-You can also share the game without that link:
-
-- **Send the files.** Zip `index.html`, `style.css` and `game.js`. Your friends unzip them and open `index.html`.
-- **Host it yourself.** Upload the folder to a free static host such as GitHub Pages or Netlify (both need an account).
-
-Changes you make to the local files don't reach the online version on their own. It has to be republished to the same link.
+Open `index.html` in a modern browser (Chrome, Edge, Firefox or Safari). Solo play works offline. Online play needs an internet connection to load PeerJS and to connect players.
 
 ## Project files
 
-| File         | What it contains                                           |
-| ------------ | ---------------------------------------------------------- |
-| `index.html` | The page, start screen and end-of-round screen             |
-| `style.css`  | Styling for the counters, kill feed and screens            |
-| `game.js`    | The game: movement, shooting, hit detection and bot behaviour |
+| File         | What it contains |
+| ------------ | ---------------- |
+| `index.html` | The page, menu, lobby and end-of-round screens |
+| `style.css`  | Styling for the screens, counters and kill feed |
+| `game.js`    | The game: movement, shooting, bots, drawing, and the match logic for host and players |
+| `net.js`     | Online connections: creating a room, joining by code, and detecting players who drop out |
 
 ## Changing the difficulty
 
@@ -68,4 +91,4 @@ These settings are in `game.js`:
 - `BOT_SPEED` sets how fast bots move. Raise it to make them harder to hit.
 - `accuracy` in `makeEntity` sets each bot's maximum aim error, in radians. Lower it to make bots more accurate.
 - `fireRate` in `makeEntity` sets the seconds between a bot's shots. Lower it to make bots fire faster.
-- `PLAYER_SPEED` and `PLAYER_COOLDOWN` do the same for you.
+- `PLAYER_SPEED` and `PLAYER_COOLDOWN` set every player's speed and the time between their shots.
