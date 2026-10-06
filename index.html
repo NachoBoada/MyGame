@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Last One Standing</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="wrap">
+      <canvas id="game" width="1200" height="800"></canvas>
+
+      <div id="hud">
+        <div id="alive">Alive: 6</div>
+        <div id="kills">Kills: 0</div>
+      </div>
+      <div id="feed"></div>
+      <div id="banner"></div>
+
+      <div id="overlay">
+        <div class="panel">
+          <h1 id="ov-title">Last One Standing</h1>
+          <p id="ov-text">
+            You vs. 5 bots. One shot kills anyone, so be the last one alive.<br />
+            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim
+            &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>R</b> restart
+          </p>
+          <button id="play">Play</button>
+        </div>
+      </div>
+    </div>
+    <script src="game.js"></script>
+  </body>
+</html>
