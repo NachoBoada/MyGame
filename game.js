@@ -20,19 +20,81 @@
   const HEARTBEAT_MS = 1000;
   const TIMEOUT_MS = 10000;
 
-  const WALLS = [
-    { x: 200, y: 150, w: 160, h: 30 },
-    { x: 840, y: 150, w: 160, h: 30 },
-    { x: 200, y: 620, w: 160, h: 30 },
-    { x: 840, y: 620, w: 160, h: 30 },
-    { x: 560, y: 330, w: 80, h: 140 },
-    { x: 380, y: 300, w: 30, h: 200 },
-    { x: 790, y: 300, w: 30, h: 200 },
-    { x: 540, y: 100, w: 120, h: 30 },
-    { x: 540, y: 670, w: 120, h: 30 },
-    { x: 80, y: 370, w: 100, h: 60 },
-    { x: 1020, y: 370, w: 100, h: 60 },
+  // Mirror rectangles into all four quarters of the arena, so a map is symmetric
+  // left-right and top-bottom. Rectangles that sit on a center line aren't duplicated.
+  function mirrored(...rects) {
+    const out = [];
+    const seen = new Set();
+    for (const r of rects) {
+      for (const [x, y] of [[r.x, r.y], [W - r.x - r.w, r.y], [r.x, H - r.y - r.h], [W - r.x - r.w, H - r.y - r.h]]) {
+        const key = `${x},${y},${r.w},${r.h}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push({ x, y, w: r.w, h: r.h });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Every map keeps the spawn points below clear, and every spawn can reach every other.
+  const MAPS = [
+    {
+      id: "outpost",
+      name: "Outpost",
+      walls: [
+        { x: 200, y: 150, w: 160, h: 30 },
+        { x: 840, y: 150, w: 160, h: 30 },
+        { x: 200, y: 620, w: 160, h: 30 },
+        { x: 840, y: 620, w: 160, h: 30 },
+        { x: 560, y: 330, w: 80, h: 140 },
+        { x: 380, y: 300, w: 30, h: 200 },
+        { x: 790, y: 300, w: 30, h: 200 },
+        { x: 540, y: 100, w: 120, h: 30 },
+        { x: 540, y: 670, w: 120, h: 30 },
+        { x: 80, y: 370, w: 100, h: 60 },
+        { x: 1020, y: 370, w: 100, h: 60 },
+      ],
+    },
+    {
+      // L-shaped bunkers around an open center with a single block
+      id: "crossroads",
+      name: "Crossroads",
+      walls: mirrored(
+        { x: 250, y: 200, w: 200, h: 30 },
+        { x: 250, y: 230, w: 30, h: 110 },
+        { x: 585, y: 120, w: 30, h: 110 },
+        { x: 560, y: 380, w: 80, h: 40 },
+        { x: 90, y: 385, w: 110, h: 30 },
+      ),
+    },
+    {
+      // A grid of small pillars: lots of cover, short sight lines
+      id: "pillars",
+      name: "Pillars",
+      walls: mirrored(
+        { x: 275, y: 225, w: 50, h: 50 },
+        { x: 275, y: 375, w: 50, h: 50 },
+        { x: 475, y: 225, w: 50, h: 50 },
+        { x: 475, y: 375, w: 50, h: 50 },
+        { x: 130, y: 160, w: 50, h: 50 },
+      ),
+    },
+    {
+      // Two long trench lines with gaps at the ends and in the middle
+      id: "trenches",
+      name: "Trenches",
+      walls: mirrored(
+        { x: 120, y: 230, w: 380, h: 30 },
+        { x: 560, y: 330, w: 80, h: 140 },
+        { x: 150, y: 370, w: 120, h: 60 },
+      ),
+    },
   ];
+
+  // The map being played or previewed. Collisions, bots and drawing all read WALLS.
+  let currentMap = MAPS[0];
+  let WALLS = currentMap.walls;
 
   const SPAWNS = [
     { x: 70, y: 70 },
@@ -82,6 +144,7 @@
   const codeInput = $("code");
   const menuStatus = $("menu-status");
   const menuButtons = [$("create"), $("join"), $("solo")];
+  const mapSelects = [...document.querySelectorAll(".map-select")];
 
   function showPanel(name) {
     overlay.hidden = !name;
@@ -322,7 +385,7 @@
     beginRound(roster, true);
     if (session.role === "host") {
       session.inputs.clear();
-      session.lastStart = { t: "start", round: state.round, roster };
+      session.lastStart = { t: "start", round: state.round, map: currentMap.id, roster };
       session.net.broadcast(session.lastStart);
     }
   }
@@ -425,6 +488,7 @@
     const isClient = session.role === "client";
     $("again").hidden = isClient;
     $("end-wait").hidden = !isClient;
+    $("end-map").hidden = isClient;
     $("end-leave").textContent = session.role === "solo" ? "Main menu" : "Leave match";
     bannerEl.innerHTML = "";
     showPanel("end");
@@ -707,7 +771,7 @@
   }
 
   function lobbyMessage() {
-    return { t: "lobby", players: session.players.map(({ pid, name }) => ({ pid, name })) };
+    return { t: "lobby", map: currentMap.id, players: session.players.map(({ pid, name }) => ({ pid, name })) };
   }
 
   function broadcastLobby() {
@@ -775,10 +839,12 @@
         break;
       case "lobby":
         session.players = Array.isArray(msg.players) ? msg.players : [];
+        if (!state.running) setMap(msg.map);
         renderLobby();
         break;
       case "start":
         state.round = msg.round;
+        setMap(msg.map);
         beginRound(msg.roster, false);
         break;
       case "s":
@@ -871,6 +937,28 @@
 
   // ---------- Menu and lobby ----------
   const NAME_KEY = "last-one-standing-name";
+  const MAP_KEY = "last-one-standing-map";
+
+  // Switch the map being played or previewed, and keep every map selector in sync
+  function setMap(id) {
+    currentMap = MAPS.find((m) => m.id === id) || MAPS[0];
+    WALLS = currentMap.walls;
+    for (const sel of mapSelects) sel.value = currentMap.id;
+  }
+
+  function savedMap() {
+    try { return localStorage.getItem(MAP_KEY); } catch { return null; }
+  }
+
+  for (const sel of mapSelects) {
+    sel.innerHTML = MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join("");
+    sel.addEventListener("change", () => {
+      if (session.role === "client" || state.running) return;
+      setMap(sel.value);
+      try { localStorage.setItem(MAP_KEY, currentMap.id); } catch {}
+      if (session.role === "host") broadcastLobby();
+    });
+  }
 
   function myName() {
     return cleanName(nameInput.value);
@@ -915,6 +1003,7 @@
     });
     const isHost = session.role === "host";
     $("start").hidden = !isHost;
+    $("map-lobby").disabled = !isHost;
     $("lobby-hint").textContent = isHost
       ? "Send your friends the room code or invite link. Bots fill any empty slots."
       : "Waiting for the host to start the match…";
@@ -929,6 +1018,7 @@
     });
     session.inputs.clear();
     Object.assign(state, { running: false, entities: [], bullets: [], particles: [], wrecks: [], over: false, countdown: 0 });
+    setMap(savedMap());
     feedEl.innerHTML = "";
     bannerEl.innerHTML = "";
     updateHud();
@@ -1013,6 +1103,7 @@
 
   // Restore the saved name, and pre-fill the room code from an invite link
   try { nameInput.value = localStorage.getItem(NAME_KEY) || ""; } catch {}
+  setMap(savedMap());
   const invitedTo = window.Net && Net.normalizeCode(new URLSearchParams(location.search).get("room"));
   if (invitedTo) {
     codeInput.value = invitedTo;
@@ -1034,9 +1125,10 @@
   }
 
   function drawWalls() {
+    // All shadows first, so a shadow never darkens a neighbouring wall
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    for (const r of WALLS) ctx.fillRect(r.x + 5, r.y + 6, r.w, r.h);
     for (const r of WALLS) {
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
-      ctx.fillRect(r.x + 5, r.y + 6, r.w, r.h);
       ctx.fillStyle = "#4a5468";
       ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.strokeStyle = "#6b7790";

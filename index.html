@@ -35,6 +35,11 @@
             <input id="name" type="text" maxlength="14" autocomplete="nickname" placeholder="Player" />
           </label>
 
+          <label class="field" for="map-menu">
+            <span>Map</span>
+            <select id="map-menu" class="map-select"></select>
+          </label>
+
           <div class="actions">
             <button id="create" class="primary">Create online match</button>
             <div class="join-row">
@@ -57,6 +62,10 @@
             <input id="invite-link" type="text" readonly aria-label="Invite link" />
             <button id="copy-link">Copy invite link</button>
           </div>
+          <label class="field" for="map-lobby">
+            <span>Map</span>
+            <select id="map-lobby" class="map-select"></select>
+          </label>
           <ul id="player-list"></ul>
           <p id="lobby-hint" class="status"></p>
           <div class="actions row">
@@ -70,6 +79,10 @@
           <h1 id="end-title"></h1>
           <p id="end-text"></p>
           <p id="end-wait" class="status">Waiting for the host to start the next round…</p>
+          <label class="field" id="end-map" for="map-end">
+            <span>Map for the next round</span>
+            <select id="map-end" class="map-select"></select>
+          </label>
           <div class="actions row">
             <button id="again" class="primary">Play again</button>
             <button id="end-leave" class="ghost">Leave</button>

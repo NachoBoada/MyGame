@@ -136,7 +136,8 @@ html, body {
   color: #b9c2d3;
 }
 
-input[type="text"] {
+input[type="text"],
+select {
   font: inherit;
   font-size: 16px;
   color: #e8ecf3;
@@ -148,7 +149,11 @@ input[type="text"] {
   min-width: 0;
 }
 
-input[type="text"]:focus { outline: 2px solid #7fb83e; outline-offset: 1px; }
+input[type="text"]:focus,
+select:focus { outline: 2px solid #7fb83e; outline-offset: 1px; }
+
+select { cursor: pointer; }
+select:disabled { cursor: default; opacity: 0.8; }
 
 #code { text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700; }
 

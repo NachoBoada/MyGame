@@ -26,6 +26,24 @@ You can also click **Play solo vs bots** to play alone against 5 bots, with no i
 2. Shoot the other tanks, and use the walls as cover. Bots fight everyone, including each other.
 3. Be the last tank left.
 
+### Maps
+
+There are 4 maps. Each one is symmetric, so no spawn point has an advantage.
+
+| Map | Layout |
+| --- | ------ |
+| **Outpost** | Mixed cover: long walls, two side columns and a central block |
+| **Crossroads** | Four L-shaped bunkers around an open center |
+| **Pillars** | A grid of small pillars, with lots of cover and short sight lines |
+| **Trenches** | Two long trench lines, with gaps at the ends and in the middle |
+
+To choose a map:
+
+- **Solo:** pick it in the **Map** list on the main menu before clicking **Play solo vs bots**.
+- **Online:** the host picks it in the lobby, and everyone else sees the choice. The host can also choose a different map on the end-of-round screen before clicking **Play again**.
+
+The game remembers the last map you chose.
+
 ### Controls
 
 | Action  | Key                     |
