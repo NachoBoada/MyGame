@@ -52,6 +52,7 @@ The game remembers the last map you chose.
 | Aim     | Mouse                   |
 | Shoot   | Left click (hold to keep firing) |
 | Restart | `R` (solo only)         |
+| Sound on/off | `M`                |
 
 You need a keyboard and mouse. There are no touch controls, so the game doesn't work on phones or tablets.
 
@@ -100,6 +101,8 @@ Open `index.html` in a modern browser (Chrome, Edge, Firefox or Safari). Solo pl
 | `index.html` | The page, menu, lobby and end-of-round screens |
 | `style.css`  | Styling for the screens, counters and kill feed |
 | `game.js`    | The game: movement, shooting, bots, drawing, and the match logic for host and players |
+| `sound.js`   | Plays the game's sounds, and the **M** key's sound on/off setting |
+| `shot-sound.js` | The shot sound (a short explosion), embedded so it also plays when the game is opened from disk |
 | `net.js`     | Online connections: creating a room, joining by code, and detecting players who drop out |
 
 ## Changing the difficulty

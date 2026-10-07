@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Last One Standing</title>
-    <link rel="stylesheet" href="style.css" />
+    <!-- Bump ?v= on every release so browsers fetch the new files instead of cached ones -->
+    <link rel="stylesheet" href="style.css?v=3" />
   </head>
   <body>
     <div id="wrap">
@@ -14,6 +15,7 @@
         <div id="alive">Alive: 6</div>
         <div id="kills">Kills: 0</div>
         <div id="room-chip" hidden></div>
+        <div id="sound-chip" hidden>Sound off · M</div>
       </div>
       <div id="feed"></div>
       <div id="banner"></div>
@@ -27,7 +29,7 @@
             One shot destroys any tank, so be the last one left.
           </p>
           <p class="controls">
-            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot
+            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>M</b> sound on/off
           </p>
 
           <label class="field" for="name">
@@ -91,7 +93,9 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
-    <script src="net.js"></script>
-    <script src="game.js"></script>
+    <script src="net.js?v=3"></script>
+    <script src="shot-sound.js?v=3"></script>
+    <script src="sound.js?v=3"></script>
+    <script src="game.js?v=3"></script>
   </body>
 </html>

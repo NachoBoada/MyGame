@@ -92,7 +92,8 @@ html, body {
 
 [hidden] { display: none !important; }
 
-#room-chip {
+#room-chip,
+#sound-chip {
   font-size: 14px;
   font-weight: 600;
   align-self: center;

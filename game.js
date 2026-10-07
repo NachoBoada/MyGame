@@ -164,6 +164,10 @@
     if (e.target instanceof HTMLInputElement) return; // typing a name or code
     keys.add(e.code);
     if (e.code === "KeyR" && session.role === "solo") startRound();
+    if (e.code === "KeyM" && window.Sound) {
+      Sound.toggleMute();
+      updateHud();
+    }
     if (state.running && (e.code.startsWith("Arrow") || e.code === "Space")) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => keys.delete(e.code));
@@ -423,6 +427,7 @@
       life: BULLET_LIFE,
     });
     e.muzzle = 0.06;
+    if (isMine(e) && window.Sound) Sound.shot();
   }
 
   function kill(victim, killer) {
@@ -510,6 +515,7 @@
     const online = session.role === "host" || session.role === "client";
     roomChip.hidden = !online;
     roomChip.textContent = online ? `Room ${session.code}` : "";
+    $("sound-chip").hidden = !(window.Sound && Sound.muted);
   }
 
   // ---------- Simulation (host and solo) ----------
@@ -905,6 +911,17 @@
     state.bullets = state.bullets.filter((b) => b.life > 0);
 
     const me = mine();
+
+    // Play your own shots straight away, using the same fire rate as the host,
+    // instead of waiting for the host's update to arrive
+    if (me && me.alive) {
+      me.cooldown -= dt;
+      if (mouse.down && state.countdown <= 0 && !state.over && me.cooldown <= 0) {
+        me.cooldown = PLAYER_COOLDOWN;
+        if (window.Sound) Sound.shot();
+      }
+    }
+
     session.sendTimer += dt;
     if (me && me.alive && session.sendTimer >= INPUT_INTERVAL) {
       session.sendTimer = 0;
