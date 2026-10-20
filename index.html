@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Last One Standing</title>
     <!-- Bump ?v= on every release so browsers fetch the new files instead of cached ones -->
-    <link rel="stylesheet" href="style.css?v=6" />
+    <link rel="stylesheet" href="style.css?v=8" />
   </head>
   <body>
     <div id="wrap">
@@ -16,6 +16,7 @@
         <div id="kills">Kills: 0</div>
         <div id="room-chip" hidden></div>
         <div id="sound-chip" hidden>Sound is off · M</div>
+        <div id="jump-chip" hidden></div>
       </div>
       <div id="feed"></div>
       <div id="banner"></div>
@@ -29,7 +30,7 @@
             Pick a tank with its own strengths and weaknesses, then be the last one left.
           </p>
           <p class="controls">
-            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>E</b> / right-click lay a mine (tank 6) &nbsp;·&nbsp; <b>M</b> sound on/off
+            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>E</b> / right-click lay a mine (tank 6) &nbsp;·&nbsp; <b>Space</b> jump (tank 7) &nbsp;·&nbsp; <b>M</b> sound on/off
           </p>
 
           <label class="field" for="name">
@@ -113,6 +114,6 @@
     <script src="shot-sound.js?v=4"></script>
     <script src="destroyed-sound.js?v=4"></script>
     <script src="sound.js?v=4"></script>
-    <script src="game.js?v=7"></script>
+    <script src="game.js?v=8"></script>
   </body>
 </html>

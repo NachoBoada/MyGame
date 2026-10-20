@@ -93,7 +93,8 @@ html, body {
 [hidden] { display: none !important; }
 
 #room-chip,
-#sound-chip {
+#sound-chip,
+#jump-chip {
   font-size: 14px;
   font-weight: 600;
   align-self: center;
@@ -226,7 +227,7 @@ button.ghost { background: transparent; }
 
 .tank-picker {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
@@ -254,5 +255,6 @@ button.ghost { background: transparent; }
   .panel { gap: 10px; padding: 18px 24px; }
   .panel h1 { font-size: 26px; }
   .tank-card canvas { height: 44px; }
-  .panel .controls, .panel .lede { font-size: 13px; }
+  .panel .controls { font-size: 13px; }
+  .panel .lede { display: none; }
 }

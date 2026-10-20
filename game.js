@@ -21,6 +21,11 @@
   const MINE_MAX = 4; // mines one tank can have on the field; placing more removes the oldest
   const MINE_DAMAGE = 100;
 
+  // Jumping (tank 7): a short leap over walls
+  const JUMP_TIME = 0.5; // seconds in the air
+  const JUMP_SPEED = 420; // pixels per second, so a jump covers about 210 pixels
+  const JUMP_COOLDOWN = 3.0;
+
   // Networking
   const MAX_PLAYERS = 6;
   const SNAPSHOT_INTERVAL = 0.05; // host → players, 20 per second
@@ -124,6 +129,7 @@
     twin:      { L: 36, Wd: 30, tw: 7, turret: "hex",      ts: 10, bl: 20, bw: 4,   twin: true,  brake: false },
     destroyer: { L: 38, Wd: 28, tw: 7, turret: "casemate", ts: 10, bl: 28, bw: 5,   twin: false, brake: true },
     sniper:    { L: 34, Wd: 26, tw: 6, turret: "round",    ts: 8,  bl: 32, bw: 3.5, twin: false, brake: true },
+    hopper:    { L: 34, Wd: 28, tw: 6, turret: "tri",      ts: 10, bl: 24, bw: 4.5, twin: false, brake: false, legs: true },
   };
 
   // The 6 tank types. Anyone can pick any of them, including the same one as another player.
@@ -134,6 +140,7 @@
   //   bulletSpeed: bullet speed, as a multiple of normal
   //   pierce: bullets pass through walls    autoAim: aims at the nearest visible enemy
   //   mines: can lay mines                   range: bullets vanish after this many pixels (0 = no limit)
+  //   jump: can leap over walls with Space (but cannot shoot while in the air)
   const TANK_TYPES = [
     { id: 1, name: "Bulwark", color: "#d0644a", design: "heavy", hp: 200, speed: 0.7, dmg: 100, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: false, range: 0,
       desc: "Takes twice as many hits, but moves at 70% speed." },
@@ -147,6 +154,8 @@
       desc: "Aims automatically at the nearest enemy it can see, but fires at half the normal rate." },
     { id: 6, name: "Sapper", color: "#7fb83e", design: "medium", hp: 100, speed: 1, dmg: 100, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: true, range: 100,
       desc: "Lays mines (E or right-click), but its bullets only reach 100 pixels." },
+    { id: 7, name: "Hopper", color: "#e05fa8", design: "hopper", hp: 100, speed: 1, dmg: 100, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: false, range: 0, jump: true,
+      desc: "Jumps over walls with Space, but can't shoot in the air and needs 3 seconds to recharge." },
   ];
 
   function cleanTank(v) {
@@ -195,7 +204,9 @@
     if (e.code === "KeyR" && session.role === "solo") startRound();
     // Space on the end-of-round screen starts a new solo game. A focused button
     // keeps its own Space behaviour, so the round can't start twice.
-    if (e.code === "Space" && session.role === "solo" && !panels.end.hidden && !overlay.hidden
+    // (A short delay stops a Space press from a last jump from skipping the results.)
+    if (e.code === "Space" && !e.repeat && session.role === "solo" && !panels.end.hidden && !overlay.hidden
+        && performance.now() - state.endShownAt > 600
         && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
       e.preventDefault();
       startRound();
@@ -289,6 +300,11 @@
     return Math.hypot(x1 + t * dx - px, y1 + t * dy - py);
   }
 
+  function clampArena(e) {
+    e.x = clamp(e.x, RADIUS, W - RADIUS);
+    e.y = clamp(e.y, RADIUS, H - RADIUS);
+  }
+
   function resolveWalls(e) {
     e.x = clamp(e.x, RADIUS, W - RADIUS);
     e.y = clamp(e.y, RADIUS, H - RADIUS);
@@ -373,6 +389,7 @@
     endTimer: 0,
     winnerId: -1,
     myKills: 0,
+    endShownAt: 0,
   };
 
   const isMine = (e) => e.pid !== null && e.pid === session.myPid;
@@ -395,6 +412,9 @@
       hp: spec.hp,
       flash: 0,
       mineCd: 0,
+      jump: 0, // seconds left in the air
+      jumpDir: 0,
+      jumpCd: 0,
       x: r.x, y: r.y,
       px: r.x, py: r.y,
       vx: 0, vy: 0,
@@ -511,7 +531,7 @@
     for (const m of state.mines.slice()) {
       m.age += dt;
       if (m.age < MINE_ARM_TIME) continue;
-      const victim = state.entities.find((e) => e.alive && e.id !== m.owner && Math.hypot(e.x - m.x, e.y - m.y) < MINE_RADIUS);
+      const victim = state.entities.find((e) => e.alive && e.jump <= 0 && e.id !== m.owner && Math.hypot(e.x - m.x, e.y - m.y) < MINE_RADIUS);
       if (!victim) continue;
       state.mines.splice(state.mines.indexOf(m), 1);
       spark(m.x, m.y, "#ffb347", 22);
@@ -587,6 +607,7 @@
     $("end-map").hidden = isClient;
     $("end-leave").textContent = session.role === "solo" ? "Main menu" : "Leave match";
     bannerEl.innerHTML = "";
+    state.endShownAt = performance.now();
     showPanel("end");
   }
 
@@ -610,7 +631,7 @@
   }
 
   // ---------- Simulation (host and solo) ----------
-  const NO_INPUT = { u: 0, d: 0, l: 0, r: 0, f: 0, m: 0, a: null };
+  const NO_INPUT = { u: 0, d: 0, l: 0, r: 0, f: 0, m: 0, j: 0, a: null };
 
   function localInput(e) {
     return {
@@ -620,6 +641,7 @@
       r: keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0,
       f: mouse.down ? 1 : 0,
       m: keys.has("KeyE") || mouse.mine ? 1 : 0,
+      j: keys.has("Space") ? 1 : 0,
       a: Math.atan2(mouse.y - e.y, mouse.x - e.x),
     };
   }
@@ -628,11 +650,29 @@
   function cleanInput(m) {
     const b = (v) => (v ? 1 : 0);
     const a = Number(m.a);
-    return { u: b(m.u), d: b(m.d), l: b(m.l), r: b(m.r), f: b(m.f), m: b(m.m), a: Number.isFinite(a) ? a : null };
+    return { u: b(m.u), d: b(m.d), l: b(m.l), r: b(m.r), f: b(m.f), m: b(m.m), j: b(m.j), a: Number.isFinite(a) ? a : null };
   }
 
   function inputFor(e) {
     return e.pid === session.myPid ? localInput(e) : session.inputs.get(e.pid) || NO_INPUT;
+  }
+
+  function startJump(e, dir) {
+    e.jump = JUMP_TIME;
+    e.jumpDir = dir;
+    e.jumpCd = JUMP_COOLDOWN;
+  }
+
+  // In the air a tank flies straight in the direction it took off. It can still aim,
+  // but cannot shoot, and walls (and mines) don't touch it.
+  function flyJump(e, dt) {
+    e.x += Math.cos(e.jumpDir) * JUMP_SPEED * dt;
+    e.y += Math.sin(e.jumpDir) * JUMP_SPEED * dt;
+    e.jump -= dt;
+    if (e.pid) {
+      const input = inputFor(e);
+      if (input.a !== null) e.angle = input.a;
+    }
   }
 
   // Angle to shoot at to hit a moving target; `lead` is how much of the target's movement to account for
@@ -681,6 +721,7 @@
       e.cooldown = PLAYER_COOLDOWN * spec.cooldown;
     }
     if (spec.mines && canFire && input.m && e.mineCd <= 0) placeMine(e);
+    if (spec.jump && canFire && input.j && e.jumpCd <= 0) startJump(e, mx || my ? Math.atan2(my, mx) : e.hullAngle);
   }
 
   function findTarget(bot) {
@@ -739,6 +780,8 @@
       const near = spec.range ? spec.range * 0.4 : 180;
       const toX = (target.x - bot.x) / d, toY = (target.y - bot.y) / d;
       let mx = -toY * ai.strafeDir, my = toX * ai.strafeDir;
+      // A jumping bot sometimes leaps sideways to dodge
+      if (canFire && spec.jump && bot.jumpCd <= 0 && Math.random() < dt * 0.25) startJump(bot, Math.atan2(my, mx));
       if (d > far) { mx += toX; my += toY; }
       else if (d < near) { mx -= toX; my -= toY; }
       const len = Math.hypot(mx, my) || 1;
@@ -753,6 +796,10 @@
       const turn = 5 * dt;
       bot.angle += clamp(angleDiff(bot.angle, desired), -turn, turn);
       if (canFire && spec.mines && bot.mineCd <= 0 && Math.random() < dt * 0.3) placeMine(bot);
+      // A jumping bot leaps over walls that are between it and where it is heading
+      if (canFire && spec.jump && bot.jumpCd <= 0 && dist(bot, ai.waypoint) > 150 && !hasLineOfSight(bot, ai.waypoint) && Math.random() < dt * 0.5) {
+        startJump(bot, Math.atan2(ai.waypoint.y - bot.y, ai.waypoint.x - bot.x));
+      }
     }
 
     // Stuck detection: if barely moved in a second, pick a new waypoint
@@ -761,6 +808,7 @@
       if (dist(bot, ai.stuckFrom) < 20) {
         newWaypoint(bot);
         ai.strafeDir *= -1;
+        if (canFire && spec.jump && bot.jumpCd <= 0) startJump(bot, Math.atan2(ai.waypoint.y - bot.y, ai.waypoint.x - bot.x));
       }
       ai.stuckTimer = 0;
       ai.stuckFrom = { x: bot.x, y: bot.y };
@@ -863,9 +911,12 @@
       e.px = e.x; e.py = e.y;
       e.cooldown -= dt;
       e.mineCd -= dt;
+      e.jumpCd -= dt;
       e.flash -= dt;
       e.muzzle -= dt;
-      if (e.pid) {
+      if (e.jump > 0) {
+        flyJump(e, dt);
+      } else if (e.pid) {
         const input = inputFor(e);
         // During the countdown players can aim but not move
         if (state.countdown > 0) { if (input.a !== null) e.angle = input.a; }
@@ -877,7 +928,8 @@
 
     resolveEntityOverlap(living);
     for (const e of living) {
-      resolveWalls(e);
+      if (e.jump > 0) clampArena(e);
+      else resolveWalls(e);
       e.vx = dt > 0 ? (e.x - e.px) / dt : 0;
       e.vy = dt > 0 ? (e.y - e.py) / dt : 0;
       turnHull(e, dt);
@@ -909,6 +961,7 @@
       cd: r3(Math.max(0, state.countdown)),
       e: state.entities.map((e) => [
         e.id, r1(e.x), r1(e.y), r3(e.angle), r3(e.hullAngle), r1(e.tread), e.alive ? 1 : 0, e.muzzle > 0 ? 1 : 0, r1(e.hp),
+        r3(Math.max(0, e.jump)), r1(Math.max(0, e.jumpCd)),
       ]),
       b: state.bullets.map((b) => [r1(b.x), r1(b.y), Math.round(b.vx), Math.round(b.vy), b.owner]),
       mi: state.mines.map((m) => [r1(m.x), r1(m.y), m.owner, m.age >= MINE_ARM_TIME ? 1 : 0]),
@@ -1021,11 +1074,13 @@
   function applySnapshot(m) {
     if (m.r !== state.round || !state.running) return;
     state.countdown = m.cd;
-    for (const [id, x, y, a, ha, tread, isAlive, muzzle, hp] of m.e) {
+    for (const [id, x, y, a, ha, tread, isAlive, muzzle, hp, jump, jumpCd] of m.e) {
       const e = state.entities[id];
       if (!e) continue;
       if (hp < e.hp) e.flash = 0.15; // took a hit that didn't destroy it
       e.hp = hp;
+      e.jump = jump;
+      e.jumpCd = jumpCd;
       if (e.tx === undefined) { e.x = x; e.y = y; e.hullAngle = ha; }
       e.tx = x; e.ty = y; e.ta = a; e.tha = ha;
       e.tread = tread;
@@ -1046,6 +1101,8 @@
     for (const e of state.entities) {
       e.muzzle -= dt;
       e.flash -= dt;
+      e.jump -= dt;
+      e.jumpCd -= dt;
       if (e.tx === undefined) continue;
       e.x += (e.tx - e.x) * k;
       e.y += (e.ty - e.y) * k;
@@ -1410,6 +1467,15 @@
     roundRect(-L / 2 + 2, -hw, L - 4, hw * 2, 3);
     ctx.fill();
     ctx.stroke();
+    if (t.legs) {
+      // Spring-loaded leg pads at the corners
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      for (const [lx, ly] of [[-L / 2 + 6, -hw + 2], [-L / 2 + 6, hw - 2], [L / 2 - 8, -hw + 2], [L / 2 - 8, hw - 2]]) {
+        ctx.beginPath();
+        ctx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     // Sloped front plate and rear engine grille
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(L / 2 - 8, -hw + 1, 5, hw * 2 - 2);
@@ -1447,6 +1513,12 @@
       ctx.arc(0, 0, s, 0, Math.PI * 2);
     } else if (t.turret === "box") {
       roundRect(-s, -s * 0.9, s * 2, s * 1.8, 3);
+    } else if (t.turret === "tri") {
+      // Pointed, wedge-shaped turret
+      ctx.moveTo(s * 1.1, 0);
+      ctx.lineTo(-s * 0.8, -s * 0.9);
+      ctx.lineTo(-s * 0.8, s * 0.9);
+      ctx.closePath();
     } else if (t.turret === "hex") {
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
@@ -1474,8 +1546,18 @@
   function drawTank(e) {
     const t = e.tank;
     const me = isMine(e);
+    // 0 on the ground, up to 1 at the top of a jump
+    const air = e.jump > 0 ? Math.sin(Math.PI * clamp(1 - e.jump / JUMP_TIME, 0, 1)) : 0;
+    if (air > 0) {
+      // The shadow stays on the ground while the tank rises above it
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.beginPath();
+      ctx.ellipse(e.x + 2, e.y + 4, t.L * 0.5, t.Wd * 0.45, e.hullAngle, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.save();
-    ctx.translate(e.x, e.y);
+    ctx.translate(e.x, e.y - air * 22);
+    ctx.scale(1 + air * 0.28, 1 + air * 0.28);
 
     // Hull, tracks and shadow follow the direction of travel
     ctx.save();
@@ -1639,7 +1721,23 @@
     ctx.textBaseline = "alphabetic";
   }
 
+  const jumpChip = $("jump-chip");
+
+  // Shows your jump's recharge time, for a tank that can jump
+  function updateJumpChip() {
+    const me = state.running ? mine() : null;
+    let text = "";
+    if (me && me.alive && me.spec.jump) {
+      text = me.jump > 0 ? "Jumping" : me.jumpCd > 0 ? `Jump ${me.jumpCd.toFixed(1)}s` : "Jump ready · Space";
+    }
+    if (jumpChip.textContent !== text) {
+      jumpChip.textContent = text;
+      jumpChip.hidden = !text;
+    }
+  }
+
   function render() {
+    updateJumpChip();
     drawFloor();
     for (const w of state.wrecks) drawWreck(w);
     drawWalls();

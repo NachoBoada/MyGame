@@ -1,6 +1,6 @@
 # Last One Standing
 
-A top-down tank battle that runs in the browser. Up to 6 players can play online together, and bots fill any empty slots. Pick one of 6 tanks, each with its own strengths and weaknesses. The last tank left wins the round.
+A top-down tank battle that runs in the browser. Up to 6 players can play online together, and bots fill any empty slots. Pick one of 7 tanks, each with its own strengths and weaknesses. The last tank left wins the round.
 
 **Play:** https://nachoboada.github.io/MyGame/
 
@@ -52,8 +52,9 @@ The game remembers the last map you chose.
 | Aim     | Mouse                   |
 | Shoot   | Left click (hold to keep firing) |
 | Lay a mine (tank 6) | `E` or right-click |
+| Jump over walls (tank 7) | `Space` |
 | Restart | `R` (solo only)         |
-| New solo game after a round | `Space` |
+| New solo game after a round | `Space` (after a short pause, so a jump key press doesn't skip the results) |
 | Main menu, once your tank is destroyed and only bots are left (solo) | `Esc` |
 | Sound on/off | `M`                |
 
@@ -75,6 +76,9 @@ Every bullet has the colour of the tank that fired it.
 | **4 · Phantom** | Blue | Bullets pass through walls | Bullets travel at 70% speed |
 | **5 · Hunter** | Teal | Auto-aim: the turret locks onto the nearest enemy it can see | Fires at half the normal rate |
 | **6 · Sapper** | Green | Lays mines (`E` or right-click) | Bullets vanish after 100 pixels |
+| **7 · Hopper** | Pink | Jumps over walls (`Space`) | Can't shoot in the air, and needs 3 seconds to recharge |
+
+**Jumping.** A Hopper leaps about 210 pixels in the direction it is moving (or the way it is facing if it is standing still) and takes half a second to land. In the air it passes over walls and mines, and it can aim but not shoot. It can still be hit by bullets. A "Jump ready" label under the counters shows when it has recharged. If a jump lands inside a wall, the tank is pushed out to the nearest side.
 
 **Mines.** A mine arms 1 second after it is laid, shown by a blinking red light. It destroys any tank except its owner that drives close to it. A Sapper can lay one mine every 2 seconds and keep up to 4 on the field, and laying a fifth removes the oldest. Mines show for everyone and are cleared when the round ends.
 
@@ -123,4 +127,4 @@ These settings are in `game.js`:
 - `accuracy` in `makeEntity` sets each bot's maximum aim error, in radians. Lower it to make bots more accurate.
 - `fireRate` in `makeEntity` sets the seconds between a bot's shots. Lower it to make bots fire faster.
 - `PLAYER_SPEED` and `PLAYER_COOLDOWN` set every player's speed and the time between their shots.
-- `TANK_TYPES` lists the 6 tanks. Each one's health (`hp`), speed, damage, fire rate (`cooldown`), bullet speed, `range` and abilities are on one line, so you can rebalance a tank by editing its numbers. The mine settings (`MINE_*`) are near the top of the file.
+- `TANK_TYPES` lists the 7 tanks. Each one's health (`hp`), speed, damage, fire rate (`cooldown`), bullet speed, `range` and abilities are on one line, so you can rebalance a tank by editing its numbers. The mine and jump settings (`MINE_*`, `JUMP_*`) are near the top of the file.
