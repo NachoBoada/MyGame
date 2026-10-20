@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Last One Standing</title>
     <!-- Bump ?v= on every release so browsers fetch the new files instead of cached ones -->
-    <link rel="stylesheet" href="style.css?v=8" />
+    <link rel="stylesheet" href="style.css?v=11" />
   </head>
   <body>
     <div id="wrap">
@@ -38,13 +38,26 @@
             <input id="name" type="text" maxlength="14" autocomplete="nickname" placeholder="Player" />
           </label>
 
-          <label class="field" for="map-menu">
-            <span>Map</span>
-            <select id="map-menu" class="map-select"></select>
-          </label>
+          <div class="field-row three">
+            <label class="field" for="map-menu">
+              <span>Map</span>
+              <select id="map-menu" class="map-select"></select>
+            </label>
+            <label class="field" for="bots-menu">
+              <span>Bots</span>
+              <select id="bots-menu" class="bots-select"></select>
+            </label>
+            <div class="field">
+              <span>Spawn</span>
+              <button type="button" class="spawn-open" aria-label="Choose your spawn point">Random</button>
+            </div>
+          </div>
 
           <div class="field">
-            <span>Your tank</span>
+            <div class="field-head">
+              <span>Your tank</span>
+              <button type="button" class="bot-tanks-open" aria-label="Choose the tanks the bots can use">Bot tanks: All</button>
+            </div>
             <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
             <p class="tank-desc" aria-live="polite"></p>
           </div>
@@ -71,12 +84,25 @@
             <input id="invite-link" type="text" readonly aria-label="Invite link" />
             <button id="copy-link">Copy invite link</button>
           </div>
-          <label class="field" for="map-lobby">
-            <span>Map</span>
-            <select id="map-lobby" class="map-select"></select>
-          </label>
+          <div class="field-row three">
+            <label class="field" for="map-lobby">
+              <span>Map</span>
+              <select id="map-lobby" class="map-select"></select>
+            </label>
+            <label class="field" for="bots-lobby">
+              <span>Bots</span>
+              <select id="bots-lobby" class="bots-select"></select>
+            </label>
+            <div class="field">
+              <span>Spawn</span>
+              <button type="button" class="spawn-open" aria-label="Choose your spawn point">Random</button>
+            </div>
+          </div>
           <div class="field">
-            <span>Your tank</span>
+            <div class="field-head">
+              <span>Your tank</span>
+              <button type="button" class="bot-tanks-open" aria-label="Choose the tanks the bots can use">Bot tanks: All</button>
+            </div>
             <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
             <p class="tank-desc" aria-live="polite"></p>
           </div>
@@ -93,18 +119,53 @@
           <h1 id="end-title"></h1>
           <p id="end-text"></p>
           <p id="end-wait" class="status">Waiting for the host to start the next round…</p>
-          <label class="field" id="end-map" for="map-end">
-            <span>Map for the next round</span>
-            <select id="map-end" class="map-select"></select>
-          </label>
+          <div class="field-row" id="end-settings">
+            <label class="field" for="map-end">
+              <span>Map for the next round</span>
+              <select id="map-end" class="map-select"></select>
+            </label>
+            <label class="field" for="bots-end">
+              <span>Bots</span>
+              <select id="bots-end" class="bots-select"></select>
+            </label>
+          </div>
           <div class="field">
-            <span>Your tank</span>
+            <span>Spawn point</span>
+            <button type="button" class="spawn-open" aria-label="Choose your spawn point">Random</button>
+          </div>
+          <div class="field">
+            <div class="field-head">
+              <span>Your tank</span>
+              <button type="button" class="bot-tanks-open" aria-label="Choose the tanks the bots can use">Bot tanks: All</button>
+            </div>
             <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
             <p class="tank-desc" aria-live="polite"></p>
           </div>
           <div class="actions row">
             <button id="again" class="primary">Play again</button>
             <button id="end-leave" class="ghost">Leave</button>
+          </div>
+        </div>
+
+        <!-- Choosing the tanks the bots may use -->
+        <div class="panel" id="bottanks-panel" hidden>
+          <h2>Tanks the bots can use</h2>
+          <p>Bots pick at random from the tanks you switch on. At least one has to stay on.</p>
+          <div class="tank-picker bot-picker" role="group" aria-label="Tanks the bots can use"></div>
+          <div class="actions row">
+            <button type="button" id="bottanks-all">Select all</button>
+            <button type="button" id="bottanks-done" class="primary">Done</button>
+          </div>
+        </div>
+
+        <!-- Choosing a spawn point: a small panel over the arena, which stays clickable -->
+        <div class="panel" id="spawn-panel" hidden>
+          <h2>Choose your spawn point</h2>
+          <p>Click a numbered point on the map, or use the list.</p>
+          <div class="spawn-row">
+            <select id="spawn-select" aria-label="Spawn point"></select>
+            <button type="button" id="spawn-random">Random</button>
+            <button type="button" id="spawn-done" class="primary">Done</button>
           </div>
         </div>
       </div>
@@ -114,6 +175,6 @@
     <script src="shot-sound.js?v=4"></script>
     <script src="destroyed-sound.js?v=4"></script>
     <script src="sound.js?v=4"></script>
-    <script src="game.js?v=8"></script>
+    <script src="game.js?v=13"></script>
   </body>
 </html>

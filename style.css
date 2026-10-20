@@ -258,3 +258,57 @@ button.ghost { background: transparent; }
   .panel .controls { font-size: 13px; }
   .panel .lede { display: none; }
 }
+
+.field-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+.field-row .field { min-width: 0; }
+
+#player-list li.empty { opacity: 0.3; }
+
+.field-row.three { grid-template-columns: 2fr 1fr 1.25fr; }
+
+.spawn-open {
+  width: 100%;
+  text-align: left;
+  font-weight: 600;
+  background: #0f131a;
+  border: 1px solid #2c3445;
+  padding: 10px 12px;
+}
+
+.spawn-open::after { content: " ›"; color: #8d97aa; }
+
+/* While a spawn point is chosen, the arena shows through and takes the clicks */
+#overlay.spawning { background: none; pointer-events: none; }
+#overlay.spawning .panel { pointer-events: auto; max-width: 400px; padding: 16px 20px; gap: 10px; }
+#overlay.spawning .panel p { font-size: 13px; }
+
+.spawn-row { display: flex; gap: 8px; }
+.spawn-row select { flex: 1; min-width: 0; }
+.spawn-row button { padding: 10px 14px; }
+
+@media (max-width: 520px) {
+  .field-row.three { grid-template-columns: 1fr 1fr; }
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bot-tanks-open {
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cfd6e4;
+  background: transparent;
+  border-radius: 999px;
+}
+
+.bot-tanks-open::after { content: " ›"; color: #8d97aa; }

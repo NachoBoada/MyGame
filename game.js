@@ -50,7 +50,25 @@
     return out;
   }
 
-  // Every map keeps the spawn points below clear, and every spawn can reach every other.
+  // A map's spawn points: each base point mirrored into all four corners of the arena, plus
+  // the two points in the middle of the top and bottom edges. That gives 4 x bases + 2 points,
+  // numbered from the top left, row by row. Every point is clear of walls and every point can
+  // reach every other one.
+  function spawnPoints(...bases) {
+    const out = [];
+    const seen = new Set();
+    for (const [x, y] of [...bases, [W / 2, 45]]) {
+      for (const [px, py] of [[x, y], [W - x, y], [x, H - y], [W - x, H - y]]) {
+        const key = `${px},${py}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push({ x: px, y: py });
+        }
+      }
+    }
+    return out.sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+
   const MAPS = [
     {
       id: "outpost",
@@ -68,6 +86,7 @@
         { x: 80, y: 370, w: 100, h: 60 },
         { x: 1020, y: 370, w: 100, h: 60 },
       ],
+      spawns: spawnPoints([70, 70], [320, 60], [60, 240], [470, 230]),
     },
     {
       // L-shaped bunkers around an open center with a single block
@@ -80,6 +99,7 @@
         { x: 560, y: 380, w: 80, h: 40 },
         { x: 90, y: 385, w: 110, h: 30 },
       ),
+      spawns: spawnPoints([70, 70], [320, 60], [60, 240], [150, 300]),
     },
     {
       // A grid of small pillars: lots of cover, short sight lines
@@ -92,6 +112,7 @@
         { x: 475, y: 375, w: 50, h: 50 },
         { x: 130, y: 160, w: 50, h: 50 },
       ),
+      spawns: spawnPoints([70, 70], [320, 60], [60, 240], [400, 300]),
     },
     {
       // Two long trench lines with gaps at the ends and in the middle
@@ -102,21 +123,16 @@
         { x: 560, y: 330, w: 80, h: 140 },
         { x: 150, y: 370, w: 120, h: 60 },
       ),
+      spawns: spawnPoints([70, 70], [320, 60], [60, 240], [330, 315]),
     },
   ];
 
   // The map being played or previewed. Collisions, bots and drawing all read WALLS.
   let currentMap = MAPS[0];
+  const DEFAULT_BOTS = 5;
+  let botCount = DEFAULT_BOTS; // bots to add to a match
+  let mySpawn = -1; // the spawn point you chose on this map, or -1 for a random one
   let WALLS = currentMap.walls;
-
-  const SPAWNS = [
-    { x: 70, y: 70 },
-    { x: W - 70, y: 70 },
-    { x: 70, y: H - 70 },
-    { x: W - 70, y: H - 70 },
-    { x: W / 2, y: 45 },
-    { x: W / 2, y: H - 45 },
-  ];
 
   // Tank designs, drawn facing +x. Sizes are in pixels.
   //   L/Wd: hull length/width, tw: track width
@@ -164,7 +180,18 @@
   }
   const typeOf = (id) => TANK_TYPES[cleanTank(id) - 1];
 
-  const BOT_NAMES = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"];
+  // The tank types bots may use, as a sorted list of tank numbers. Never empty.
+  function cleanBotTanks(v) {
+    const ids = Array.isArray(v) ? v : String(v || "").split(",");
+    const set = new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= TANK_TYPES.length));
+    return set.size ? [...set].sort((a, b) => a - b) : TANK_TYPES.map((t) => t.id);
+  }
+  let botTanks = cleanBotTanks(null);
+
+  const BOT_NAMES = [
+    "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India",
+    "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec",
+  ];
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -177,17 +204,25 @@
   const feedEl = $("feed");
   const bannerEl = $("banner");
   const overlay = $("overlay");
-  const panels = { menu: $("menu-panel"), lobby: $("lobby-panel"), end: $("end-panel") };
+  const panels = { menu: $("menu-panel"), lobby: $("lobby-panel"), end: $("end-panel"), spawn: $("spawn-panel"), bottanks: $("bottanks-panel") };
   const nameInput = $("name");
   const codeInput = $("code");
   const menuStatus = $("menu-status");
   const menuButtons = [$("create"), $("join"), $("solo")];
   const mapSelects = [...document.querySelectorAll(".map-select")];
+  const botSelects = [...document.querySelectorAll(".bots-select")];
+  const spawnSelect = $("spawn-select");
+  const botTankButtons = [...document.querySelectorAll(".bot-tanks-open")];
+  const spawnButtons = [...document.querySelectorAll(".spawn-open")];
 
   function showPanel(name) {
     overlay.hidden = !name;
+    // While choosing a spawn point the arena stays visible and clickable behind a small panel
+    overlay.classList.toggle("spawning", name === "spawn");
     for (const [key, el] of Object.entries(panels)) el.hidden = key !== name;
   }
+
+  const choosing = () => !overlay.hidden && !panels.spawn.hidden;
 
   function setMenuStatus(text, isError = false) {
     menuStatus.textContent = text;
@@ -216,6 +251,8 @@
       const me = mine();
       if (me && !me.alive) leaveMatch();
     }
+    if (e.code === "Escape" && choosing()) closeSpawnPicker();
+    if (e.code === "Escape" && !overlay.hidden && !panels.bottanks.hidden) closeBotTanks();
     if (e.code === "KeyM" && window.Sound) {
       Sound.toggleMute();
       updateHud();
@@ -225,12 +262,18 @@
   window.addEventListener("keyup", (e) => keys.delete(e.code));
   window.addEventListener("blur", () => { keys.clear(); mouse.down = false; mouse.mine = false; });
 
-  canvas.addEventListener("mousemove", (e) => {
+  function updateMouse(e) {
     const r = canvas.getBoundingClientRect();
     mouse.x = ((e.clientX - r.left) / r.width) * W;
     mouse.y = ((e.clientY - r.top) / r.height) * H;
-  });
+  }
+  canvas.addEventListener("mousemove", updateMouse);
   canvas.addEventListener("mousedown", (e) => {
+    if (choosing()) {
+      updateMouse(e);
+      if (e.button === 0) pickSpawnAt(mouse.x, mouse.y);
+      return;
+    }
     if (e.button === 0) mouse.down = true;
     if (e.button === 2) mouse.mine = true; // right-click lays a mine
   });
@@ -439,23 +482,50 @@
     };
   }
 
+  // Bots added to a match: the chosen number, limited by the free spawn points. A match always
+  // has at least one bot when fewer than two people are playing, or nobody could ever win.
+  function effectiveBots(humans) {
+    const n = Math.min(botCount, currentMap.spawns.length - humans);
+    return humans < 2 ? Math.max(1, n) : n;
+  }
+
+  // Pick a spawn point for everyone in a round: each player gets the one they chose
+  // (if it is free), and bots and players who didn't choose get random free ones.
+  function assignSpawns(humans, total) {
+    const count = currentMap.spawns.length;
+    const used = new Set();
+    const spots = humans.map((h) => {
+      const want = Number.isInteger(h.spawn) ? h.spawn : -1;
+      if (want >= 0 && want < count && !used.has(want)) {
+        used.add(want);
+        return want;
+      }
+      return -1;
+    });
+    const free = shuffle([...Array(count).keys()].filter((i) => !used.has(i)));
+    while (spots.length < total) spots.push(-1);
+    return spots.map((s) => (s >= 0 ? s : free.pop()));
+  }
+
   // Host and solo: build a fresh round and tell everyone about it.
   function startRound() {
     const humans = session.role === "solo"
-      ? [{ pid: session.myPid, name: myName(), tank: myTank }]
+      ? [{ pid: session.myPid, name: myName(), tank: myTank, spawn: mySpawn }]
       : session.players.slice(0, MAX_PLAYERS);
-    const spawns = shuffle(SPAWNS.slice());
+    const bots = effectiveBots(humans.length);
+    if (session.role === "solo" && bots !== botCount) setBots(bots, true);
+    const spots = assignSpawns(humans, humans.length + bots);
     let bot = 0;
-    const roster = SPAWNS.map((_, i) => {
+    const roster = Array.from({ length: humans.length + bots }, (_, i) => {
       const h = humans[i];
       return {
         id: i,
         pid: h ? h.pid : null,
         name: h ? h.name : "Bot " + BOT_NAMES[bot++],
-        // Players fly their chosen tank; bots get a random one
-        type: h ? cleanTank(h.tank) : 1 + Math.floor(Math.random() * TANK_TYPES.length),
-        x: spawns[i].x,
-        y: spawns[i].y,
+        // Players drive their chosen tank; bots get a random one from the list the player allowed
+        type: h ? cleanTank(h.tank) : botTanks[Math.floor(Math.random() * botTanks.length)],
+        x: currentMap.spawns[spots[i]].x,
+        y: currentMap.spawns[spots[i]].y,
       };
     });
     state.round++;
@@ -604,7 +674,8 @@
     $("again").hidden = isClient;
     $("again").textContent = session.role === "solo" ? "Play again · Space" : "Play again";
     $("end-wait").hidden = !isClient;
-    $("end-map").hidden = isClient;
+    $("end-settings").hidden = isClient;
+    for (const b of botTankButtons) b.hidden = isClient;
     $("end-leave").textContent = session.role === "solo" ? "Main menu" : "Leave match";
     bannerEl.innerHTML = "";
     state.endShownAt = performance.now();
@@ -969,7 +1040,7 @@
   }
 
   function lobbyMessage() {
-    return { t: "lobby", map: currentMap.id, players: session.players.map(({ pid, name, tank }) => ({ pid, name, tank })) };
+    return { t: "lobby", map: currentMap.id, bots: botCount, botTanks, players: session.players.map(({ pid, name, tank, spawn }) => ({ pid, name, tank, spawn })) };
   }
 
   function broadcastLobby() {
@@ -990,13 +1061,24 @@
           session.net.kick(pid);
           return;
         }
-        session.players.push({ pid, name: cleanName(msg.name), tank: cleanTank(msg.tank), lastSeen: performance.now() });
+        // A spawn point someone already has is not given out twice
+        let wanted = cleanSpawn(msg.spawn);
+        if (wanted >= 0 && session.players.some((p) => p.spawn === wanted)) wanted = -1;
+        session.players.push({ pid, name: cleanName(msg.name), tank: cleanTank(msg.tank), spawn: wanted, lastSeen: performance.now() });
         session.net.send(pid, { t: "welcome" });
         broadcastLobby();
         // Joining mid-round: watch until the next round starts
         if (state.running && !state.over && session.lastStart) session.net.send(pid, session.lastStart);
         break;
       }
+      case "spawn":
+        if (player) {
+          const i = cleanSpawn(msg.i);
+          // A spawn point someone else already has is refused; the reply puts the list right
+          if (i < 0 || !session.players.some((p) => p.pid !== pid && p.spawn === i)) player.spawn = i;
+          broadcastLobby();
+        }
+        break;
       case "pick":
         if (player) {
           player.tank = cleanTank(msg.tank);
@@ -1043,7 +1125,16 @@
         break;
       case "lobby":
         session.players = Array.isArray(msg.players) ? msg.players : [];
-        if (!state.running) setMap(msg.map);
+        if (!state.running) {
+          setMap(msg.map);
+          setBots(msg.bots);
+          setBotTanks(msg.botTanks);
+        }
+        {
+          const me = session.players.find((p) => p.pid === session.myPid);
+          if (me) mySpawn = cleanSpawn(me.spawn);
+        }
+        refreshSpawnUi();
         renderLobby();
         break;
       case "start":
@@ -1167,13 +1258,56 @@
 
   // Switch the map being played or previewed, and keep every map selector in sync
   function setMap(id) {
-    currentMap = MAPS.find((m) => m.id === id) || MAPS[0];
+    const next = MAPS.find((m) => m.id === id) || MAPS[0];
+    if (next !== currentMap) mySpawn = -1; // spawn points belong to one map
+    currentMap = next;
     WALLS = currentMap.walls;
     for (const sel of mapSelects) sel.value = currentMap.id;
+    buildBotOptions();
+    setBots(botCount); // keeps the number within what the new map allows
+    refreshSpawnUi();
   }
 
   function savedMap() {
     try { return localStorage.getItem(MAP_KEY); } catch { return null; }
+  }
+
+  // The number of bots to play with. Like the map, a player's own choice is remembered,
+  // while a value received from the host is only shown.
+  const BOTS_KEY = "last-one-standing-bots";
+
+  // At most one bot fewer than the map has spawn points, which leaves a spawn point for you
+  const maxBots = () => currentMap.spawns.length - 1;
+
+  function cleanBots(v) {
+    const n = v === null || v === undefined || v === "" ? NaN : Math.round(Number(v));
+    return Number.isFinite(n) ? clamp(n, 0, maxBots()) : Math.min(DEFAULT_BOTS, maxBots());
+  }
+
+  // The Bots lists offer None up to the most the current map allows
+  function buildBotOptions() {
+    const html = Array.from({ length: maxBots() + 1 }, (_, n) => `<option value="${n}">${n === 0 ? "None" : n}</option>`).join("");
+    for (const sel of botSelects) sel.innerHTML = html;
+  }
+
+  function setBots(n, remember = false) {
+    botCount = cleanBots(n);
+    for (const sel of botSelects) sel.value = String(botCount);
+    if (remember) {
+      try { localStorage.setItem(BOTS_KEY, String(botCount)); } catch {}
+    }
+  }
+
+  function savedBots() {
+    try { return localStorage.getItem(BOTS_KEY); } catch { return null; }
+  }
+
+  for (const sel of botSelects) {
+    sel.addEventListener("change", () => {
+      if (session.role === "client" || state.running) return;
+      setBots(sel.value, true);
+      if (session.role === "host") broadcastLobby();
+    });
   }
 
   for (const sel of mapSelects) {
@@ -1182,9 +1316,157 @@
       if (session.role === "client" || state.running) return;
       setMap(sel.value);
       try { localStorage.setItem(MAP_KEY, currentMap.id); } catch {}
-      if (session.role === "host") broadcastLobby();
+      if (session.role === "host") {
+        for (const p of session.players) p.spawn = -1;
+        broadcastLobby();
+      }
     });
   }
+
+  // ---------- Spawn picker ----------
+  let spawnReturn = "menu"; // the panel to go back to when the picker is closed
+
+  function cleanSpawn(v) {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 && n < currentMap.spawns.length ? n : -1;
+  }
+
+  const spawnTakenByOther = (i) => session.players.some((p) => p.pid !== session.myPid && p.spawn === i);
+
+  function chooseSpawn(i) {
+    i = cleanSpawn(i);
+    if (i >= 0 && spawnTakenByOther(i)) return;
+    mySpawn = i;
+    refreshSpawnUi();
+    if (session.role === "host") {
+      if (session.players[0]) session.players[0].spawn = i;
+      broadcastLobby();
+    } else if (session.role === "client") {
+      session.net.send({ t: "spawn", i });
+    }
+  }
+
+  // Keep the list and the buttons that open the picker in step with the choice
+  function refreshSpawnUi() {
+    const html = '<option value="-1">Random</option>' + currentMap.spawns.map((_, i) => {
+      const taken = spawnTakenByOther(i);
+      return `<option value="${i}"${taken ? " disabled" : ""}>Spawn ${i + 1}${taken ? " (taken)" : ""}</option>`;
+    }).join("");
+    if (spawnSelect.dataset.html !== html) {
+      spawnSelect.innerHTML = html;
+      spawnSelect.dataset.html = html;
+    }
+    spawnSelect.value = String(mySpawn);
+    const label = mySpawn >= 0 ? `Spawn ${mySpawn + 1}` : "Random";
+    for (const b of spawnButtons) b.textContent = label;
+  }
+
+  function openSpawnPicker() {
+    spawnReturn = !panels.lobby.hidden ? "lobby" : !panels.end.hidden ? "end" : "menu";
+    refreshSpawnUi();
+    showPanel("spawn");
+  }
+
+  function closeSpawnPicker() {
+    showPanel(spawnReturn);
+  }
+
+  // Click on the map: take the nearest free spawn point, if the click is close enough to one
+  function pickSpawnAt(x, y) {
+    let best = -1, bestD = 32;
+    currentMap.spawns.forEach((p, i) => {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d < bestD && !spawnTakenByOther(i)) { best = i; bestD = d; }
+    });
+    if (best >= 0) chooseSpawn(best);
+  }
+
+  for (const b of spawnButtons) b.addEventListener("click", openSpawnPicker);
+  spawnSelect.addEventListener("change", () => chooseSpawn(spawnSelect.value));
+  $("spawn-random").addEventListener("click", () => chooseSpawn(-1));
+  $("spawn-done").addEventListener("click", closeSpawnPicker);
+
+  // ---------- Bot tanks ----------
+  const BOT_TANKS_KEY = "last-one-standing-bot-tanks";
+  let botTanksReturn = "menu"; // the panel to go back to when the list is closed
+
+  function savedBotTanks() {
+    try { return localStorage.getItem(BOT_TANKS_KEY); } catch { return null; }
+  }
+
+  // "All", the name of the only tank allowed, or how many are allowed
+  function botTankSummary() {
+    return botTanks.length === TANK_TYPES.length ? "All" : botTanks.length === 1 ? typeOf(botTanks[0]).name : `${botTanks.length} tanks`;
+  }
+
+  // How bots are shown in the lobby
+  function botTankName() {
+    if (botTanks.length === 1) return `${botTanks[0]} · ${typeOf(botTanks[0]).name}`;
+    return botTanks.length === TANK_TYPES.length ? "Random tank" : `Random of ${botTanks.length}`;
+  }
+
+  function refreshBotTanksUi() {
+    for (const b of botTankButtons) b.textContent = `Bot tanks: ${botTankSummary()}`;
+    for (const card of document.querySelectorAll(".bot-picker .tank-card")) {
+      const on = botTanks.includes(Number(card.dataset.tank));
+      card.classList.toggle("selected", on);
+      card.setAttribute("aria-checked", String(on));
+    }
+  }
+
+  // Like the map and the number of bots, a player's own choice is remembered,
+  // and a list received from the host is only shown.
+  function setBotTanks(v, remember = false) {
+    botTanks = cleanBotTanks(v);
+    refreshBotTanksUi();
+    if (remember) {
+      try { localStorage.setItem(BOT_TANKS_KEY, botTanks.join(",")); } catch {}
+    }
+  }
+
+  function changeBotTanks(list) {
+    if (session.role === "client") return;
+    setBotTanks(list, true);
+    if (session.role === "host") broadcastLobby();
+  }
+
+  function toggleBotTank(id) {
+    const on = botTanks.includes(id);
+    if (on && botTanks.length === 1) return; // at least one tank has to stay allowed
+    changeBotTanks(on ? botTanks.filter((n) => n !== id) : [...botTanks, id]);
+  }
+
+  function openBotTanks() {
+    botTanksReturn = !panels.lobby.hidden ? "lobby" : !panels.end.hidden ? "end" : "menu";
+    showPanel("bottanks");
+  }
+
+  function closeBotTanks() {
+    showPanel(botTanksReturn);
+  }
+
+  for (const b of botTankButtons) b.addEventListener("click", openBotTanks);
+  $("bottanks-all").addEventListener("click", () => changeBotTanks(TANK_TYPES.map((t) => t.id)));
+  $("bottanks-done").addEventListener("click", closeBotTanks);
+
+  for (const spec of TANK_TYPES) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "tank-card";
+    card.dataset.tank = spec.id;
+    card.setAttribute("role", "checkbox");
+    const cv = document.createElement("canvas");
+    cv.width = 132;
+    cv.height = 72;
+    const name = document.createElement("span");
+    name.className = "tank-name";
+    name.textContent = `${spec.id} · ${spec.name}`;
+    card.append(cv, name);
+    card.addEventListener("click", () => toggleBotTank(spec.id));
+    document.querySelector(".bot-picker").appendChild(card);
+    drawTankPreview(cv, spec);
+  }
+  refreshBotTanksUi();
 
   // ---------- Tank picker ----------
   const TANK_KEY = "last-one-standing-tank";
@@ -1209,7 +1491,7 @@
   }
 
   function refreshPickers() {
-    for (const card of document.querySelectorAll(".tank-card")) {
+    for (const card of document.querySelectorAll(".tank-picker:not(.bot-picker) .tank-card")) {
       const on = Number(card.dataset.tank) === myTank;
       card.classList.toggle("selected", on);
       card.setAttribute("aria-checked", String(on));
@@ -1229,7 +1511,7 @@
     }
   }
 
-  for (const picker of document.querySelectorAll(".tank-picker")) {
+  for (const picker of document.querySelectorAll(".tank-picker:not(.bot-picker)")) {
     for (const spec of TANK_TYPES) {
       const card = document.createElement("button");
       card.type = "button";
@@ -1278,26 +1560,39 @@
   function renderLobby() {
     const list = $("player-list");
     list.innerHTML = "";
-    for (let i = 0; i < MAX_PLAYERS; i++) {
+    for (let i = 0; i < session.players.length; i++) {
       const p = session.players[i];
       const li = document.createElement("li");
-      if (!p) li.className = "bot";
       const tags = [];
-      if (p && i === 0) tags.push("Host");
-      if (p && p.pid === session.myPid) tags.push("You");
-      const spec = p ? typeOf(p.tank) : null;
+      if (i === 0) tags.push("Host");
+      if (p.pid === session.myPid) tags.push("You");
+      const spec = typeOf(p.tank);
       li.innerHTML =
-        `<span class="swatch" style="background:${spec ? spec.color : "#5a6272"}"></span>` +
-        `<span class="pname">${p ? esc(p.name) : "Bot"}</span>` +
+        `<span class="swatch" style="background:${spec.color}"></span>` +
+        `<span class="pname">${esc(p.name)}</span>` +
         `<span class="tag">${tags.join(" · ")}</span>` +
-        `<span class="tag tank-tag">${spec ? `${spec.id} · ${spec.name}` : "Random tank"}</span>`;
+        `<span class="tag tank-tag">${spec.id} · ${spec.name}</span>`;
+      list.appendChild(li);
+    }
+    // With many bots, a single line is shown for all of them
+    const botSlots = effectiveBots(session.players.length);
+    if (botSlots > 0) {
+      const li = document.createElement("li");
+      li.className = "bot";
+      li.innerHTML =
+        '<span class="swatch" style="background:#5a6272"></span>' +
+        `<span class="pname">${botSlots} ${botSlots === 1 ? "bot" : "bots"}</span>` +
+        '<span class="tag"></span>' +
+        `<span class="tag tank-tag">${botTankName()}</span>`;
       list.appendChild(li);
     }
     const isHost = session.role === "host";
     $("start").hidden = !isHost;
     $("map-lobby").disabled = !isHost;
+    $("bots-lobby").disabled = !isHost;
+    for (const b of botTankButtons) b.disabled = !isHost;
     $("lobby-hint").textContent = isHost
-      ? "Send your friends the room code or invite link. Bots fill any empty slots."
+      ? "Send your friends the room code or invite link. Choose how many bots to add above."
       : "Waiting for the host to start the match…";
   }
 
@@ -1311,6 +1606,10 @@
     session.inputs.clear();
     Object.assign(state, { running: false, entities: [], bullets: [], mines: [], particles: [], wrecks: [], over: false, countdown: 0 });
     setMap(savedMap());
+    mySpawn = -1;
+    refreshSpawnUi();
+    setBots(savedBots());
+    setBotTanks(savedBotTanks());
     feedEl.innerHTML = "";
     bannerEl.innerHTML = "";
     updateHud();
@@ -1330,7 +1629,7 @@
     try {
       const net = await Net.host({ onMessage: onClientMessage, onLeave: onClientLeave });
       Object.assign(session, { role: "host", net, code: net.code, myPid: "host" });
-      session.players = [{ pid: "host", name: myName(), tank: myTank, lastSeen: Infinity }];
+      session.players = [{ pid: "host", name: myName(), tank: myTank, spawn: mySpawn, lastSeen: Infinity }];
       setMenuStatus("");
       enterLobby();
     } catch (err) {
@@ -1359,7 +1658,7 @@
         onClose: () => { if (session.role === "client") leaveMatch("The host closed the match."); },
       });
       Object.assign(session, { role: "client", net, code, myPid: net.pid, lastHostMsg: performance.now() });
-      net.send({ t: "hello", name: myName(), tank: myTank });
+      net.send({ t: "hello", name: myName(), tank: myTank, spawn: mySpawn });
       setMenuStatus("Joining…");
     } catch (err) {
       setMenuStatus(err.message, true);
@@ -1396,6 +1695,8 @@
   // Restore the saved name, and pre-fill the room code from an invite link
   try { nameInput.value = localStorage.getItem(NAME_KEY) || ""; } catch {}
   setMap(savedMap());
+  setBots(savedBots());
+  setBotTanks(savedBotTanks());
   const invitedTo = window.Net && Net.normalizeCode(new URLSearchParams(location.search).get("room"));
   if (invitedTo) {
     codeInput.value = invitedTo;
@@ -1414,6 +1715,53 @@
     for (let x = 0; x <= W; x += 40) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
     for (let y = 0; y <= H; y += 40) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
     ctx.stroke();
+  }
+
+  // Numbered spawn points, shown while a spawn point is being chosen
+  function drawSpawnMarkers() {
+    const spots = currentMap.spawns;
+    let hover = -1, hoverD = 32;
+    spots.forEach((p, i) => {
+      const d = Math.hypot(mouse.x - p.x, mouse.y - p.y);
+      if (d < hoverD && !spawnTakenByOther(i)) { hover = i; hoverD = d; }
+    });
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 13px system-ui, sans-serif";
+    spots.forEach((p, i) => {
+      const other = session.players.find((q) => q.pid !== session.myPid && q.spawn === i);
+      if (i === mySpawn) {
+        // Your tank, shown where it will start
+        drawTank(makeEntity({ id: -1, pid: session.myPid, name: "", type: myTank, x: p.x, y: p.y }, false));
+        ctx.strokeStyle = "#7fb83e";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.fillText(String(i + 1), p.x, p.y + 42);
+        return;
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      if (other) {
+        ctx.fillStyle = typeOf(other.tank).color;
+        ctx.globalAlpha = 0.55;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#10141c";
+        ctx.fillText((other.name || "?").slice(0, 1).toUpperCase(), p.x, p.y + 1);
+        return;
+      }
+      ctx.fillStyle = i === hover ? "rgba(127,184,62,0.55)" : "rgba(255,255,255,0.1)";
+      ctx.fill();
+      ctx.strokeStyle = i === hover ? "#fff" : "#8d97aa";
+      ctx.lineWidth = i === hover ? 3 : 2;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(String(i + 1), p.x, p.y + 1);
+    });
+    ctx.textBaseline = "alphabetic";
   }
 
   function drawWalls() {
@@ -1624,6 +1972,34 @@
     ctx.fillText(label, e.x, tagY);
   }
 
+  // A bobbing arrow over your tank during the countdown, so you can find it before the round starts.
+  // Near the top edge, where it would be cut off, it sits below the tank and points up.
+  function drawYouArrow(e) {
+    const tagY = e.y - e.tank.Wd / 2 - 10;
+    const bob = Math.sin(performance.now() / 160) * 6;
+    const below = e.y < 100;
+    const dir = below ? -1 : 1; // 1 points down at the tank, -1 points up at it
+    const tip = below ? e.y + e.tank.Wd / 2 + 16 + bob : tagY - 16 + bob;
+    ctx.save();
+    ctx.globalAlpha = clamp(state.countdown / 0.4, 0, 1); // fades out as the round starts
+    ctx.beginPath();
+    ctx.moveTo(e.x, tip);
+    ctx.lineTo(e.x - 13, tip - 14 * dir);
+    ctx.lineTo(e.x - 5, tip - 14 * dir);
+    ctx.lineTo(e.x - 5, tip - 28 * dir);
+    ctx.lineTo(e.x + 5, tip - 28 * dir);
+    ctx.lineTo(e.x + 5, tip - 14 * dir);
+    ctx.lineTo(e.x + 13, tip - 14 * dir);
+    ctx.closePath();
+    ctx.fillStyle = "#ffe14d";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1f2a";
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Burnt-out hull left where a tank was destroyed
   function drawWreck(w) {
     const t = w.tank;
@@ -1741,11 +2117,15 @@
     drawFloor();
     for (const w of state.wrecks) drawWreck(w);
     drawWalls();
+    if (choosing()) drawSpawnMarkers();
     drawMines();
     drawParticles();
     for (const e of state.entities) if (e.alive) drawTank(e);
     drawBullets();
     drawCountdown();
+    // Drawn after the countdown's darkening, so the arrow stays bright
+    const me = state.running && state.countdown > 0 ? mine() : null;
+    if (me && me.alive) drawYouArrow(me);
   }
 
   // ---------- Loop ----------

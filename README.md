@@ -1,6 +1,6 @@
 # Last One Standing
 
-A top-down tank battle that runs in the browser. Up to 6 players can play online together, and bots fill any empty slots. Pick one of 7 tanks, each with its own strengths and weaknesses. The last tank left wins the round.
+A top-down tank battle that runs in the browser. Up to 6 players can play online together, and you choose how many bots join them, up to 17. Pick one of 7 tanks, each with its own strengths and weaknesses. The last tank left wins the round.
 
 **Play:** https://nachoboada.github.io/MyGame/
 
@@ -9,10 +9,10 @@ A top-down tank battle that runs in the browser. Up to 6 players can play online
 1. One person opens the game, types a name and clicks **Create online match**. That person is the **host**.
 2. The lobby shows a 5-character **room code**. The host sends friends the code, or clicks **Copy invite link** and sends the link.
 3. Each friend opens the game, types a name, enters the code and clicks **Join**. Opening the invite link fills in the code for them.
-4. Everyone picks a tank in the lobby (see [The tanks](#the-tanks)). Several players can pick the same one. When everyone is ready, the host clicks **Start match**. Bots take any of the 6 slots that players haven't filled, with random tanks.
+4. Everyone picks a tank in the lobby (see [The tanks](#the-tanks)). Several players can pick the same one. When everyone is ready, the host clicks **Start match**. The host chooses how many bots to add with the **Bots** list (up to the free spawn points, so 18 tanks in all). Bots get random tanks.
 5. When a round ends, the host clicks **Play again** to start the next one. Everyone can change their tank on the end screen first. Anyone who joined during a round watches it and plays from the next round.
 
-You can also click **Play solo vs bots** to play alone against 5 bots, with no internet connection needed.
+You can also click **Play solo vs bots** to play alone against 1 to 17 bots, as many as you choose in the **Bots** list, with no internet connection needed.
 
 ### Things to know about online play
 
@@ -22,7 +22,7 @@ You can also click **Play solo vs bots** to play alone against 5 bots, with no i
 
 ## How to play
 
-1. A 3-2-1 countdown runs at the start of each round. Tanks can aim, but not move or shoot, until it ends.
+1. A 3-2-1 countdown runs at the start of each round. Tanks can aim, but not move or shoot, until it ends. A bobbing yellow arrow points at your tank during the countdown, so you can find it before the round starts.
 2. Shoot the other tanks, and use the walls as cover. Bots fight everyone, including each other.
 3. Be the last tank left.
 
@@ -43,6 +43,31 @@ To choose a map:
 - **Online:** the host picks it in the lobby, and everyone else sees the choice. The host can also choose a different map on the end-of-round screen before clicking **Play again**.
 
 The game remembers the last map you chose.
+
+### Spawn points
+
+Every map has 18 spawn points, and each map's points are mirrored on all four sides, so none is better than the others. You choose where your tank starts:
+
+1. Click the **Spawn** button next to the **Map** and **Bots** lists, on the main menu, in the lobby, or on the end-of-round screen. It reads **Random** until you choose a point.
+2. The arena shows the numbered spawn points. Click one, or pick it from the list. Your tank appears on it so you can see where it will start. **Random** goes back to a random point.
+3. Click **Done** (or press `Esc`) to go back.
+
+Everyone else starts on random free points: bots always, and any player who hasn't chosen. Online, each player chooses their own, and a point someone has taken shows that player's colour and initial and can't be chosen twice. Spawn points belong to one map, so changing the map sets everyone back to **Random**.
+
+### Bots
+
+Choose how many bots to play with in the **Bots** list, next to the **Map** list on the main menu. The choices are from None up to one fewer than the map's spawn points, which is 17 (every map has 18 spawn points, and one is kept for you). The game remembers your choice.
+
+- **Solo:** you play against the number you choose. You always get at least 1 bot, because a round needs an opponent. With 17 bots, all 18 spawn points are used.
+- **Online:** the host picks the number in the lobby, and everyone else sees it. A match never has more tanks than the map has spawn points (18), so bots only take the spawn points that players leave free: with 6 players and 17 bots chosen, 12 bots join. The lobby shows the players, then one line for all the bots. Choosing **None** gives a match with only players, which needs at least 2 of them. The host can change the number again on the end-of-round screen before clicking **Play again**.
+
+### Bot tanks
+
+Bots get a random tank each round. To choose which tanks they can use, click **Bot tanks** above the tank list (on the main menu, in the lobby, or on the end-of-round screen). A panel shows all 7 tanks. Click a tank to switch it on or off, then click **Done** (or press `Esc`). **Select all** turns every tank back on.
+
+- Each bot picks at random from the tanks that are on, so with only 2 tanks on, every bot drives one of those 2. With a single tank on, every bot drives that tank. At least one tank always stays on.
+- It starts with all 7 tanks on, and the game remembers your choice.
+- **Online:** the host chooses, and everyone else sees the choice in the lobby. The lobby shows what the bots will drive.
 
 ### Controls
 
