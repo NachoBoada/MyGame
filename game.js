@@ -12,6 +12,14 @@
   const PLAYER_COOLDOWN = 0.3;
   const BOT_VIEW_RANGE = 750;
   const COUNTDOWN = 3;
+  const AUTO_AIM_RANGE = 750;
+
+  // Mines (tank 6)
+  const MINE_ARM_TIME = 1.0; // seconds before a new mine can go off
+  const MINE_RADIUS = 24; // an enemy this close to a mine sets it off
+  const MINE_COOLDOWN = 2.0;
+  const MINE_MAX = 4; // mines one tank can have on the field; placing more removes the oldest
+  const MINE_DAMAGE = 100;
 
   // Networking
   const MAX_PLAYERS = 6;
@@ -118,21 +126,42 @@
     sniper:    { L: 34, Wd: 26, tw: 6, turret: "round",    ts: 8,  bl: 32, bw: 3.5, twin: false, brake: true },
   };
 
-  // One slot per tank. Players take slots in the order they joined; bots fill the rest.
-  const SLOTS = [
-    { color: "#7fb83e", tank: "medium" },
-    { color: "#d0644a", tank: "heavy" },
-    { color: "#d9a441", tank: "light" },
-    { color: "#9b7cc4", tank: "twin" },
-    { color: "#4f97c9", tank: "destroyer" },
-    { color: "#a7b0ba", tank: "sniper" },
+  // The 6 tank types. Anyone can pick any of them, including the same one as another player.
+  //   hp: hit points. A normal shot does 100, so 100 hp dies in one hit.
+  //   speed: movement speed, as a multiple of normal
+  //   dmg: damage per shot
+  //   cooldown: time between shots, as a multiple of normal (2 = half the fire rate)
+  //   bulletSpeed: bullet speed, as a multiple of normal
+  //   pierce: bullets pass through walls    autoAim: aims at the nearest visible enemy
+  //   mines: can lay mines                   range: bullets vanish after this many pixels (0 = no limit)
+  const TANK_TYPES = [
+    { id: 1, name: "Bulwark", color: "#d0644a", design: "heavy", hp: 200, speed: 0.7, dmg: 100, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: false, range: 0,
+      desc: "Takes twice as many hits, but moves at 70% speed." },
+    { id: 2, name: "Dart", color: "#d9a441", design: "light", hp: 100, speed: 1.5, dmg: 50, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: false, range: 0,
+      desc: "Moves at 150% speed, but needs 2 shots to destroy an opponent." },
+    { id: 3, name: "Twin Gun", color: "#9b7cc4", design: "twin", hp: 100, speed: 1, dmg: 50, cooldown: 0.5, bulletSpeed: 1, pierce: false, autoAim: false, mines: false, range: 0,
+      desc: "Shoots twice as fast, but each shot removes only half of an opponent's health." },
+    { id: 4, name: "Phantom", color: "#4f97c9", design: "destroyer", hp: 100, speed: 1, dmg: 100, cooldown: 1, bulletSpeed: 0.7, pierce: true, autoAim: false, mines: false, range: 0,
+      desc: "Shoots through walls, but its bullets travel at 70% speed." },
+    { id: 5, name: "Hunter", color: "#4fc3b0", design: "sniper", hp: 100, speed: 1, dmg: 100, cooldown: 2, bulletSpeed: 1, pierce: false, autoAim: true, mines: false, range: 0,
+      desc: "Aims automatically at the nearest enemy it can see, but fires at half the normal rate." },
+    { id: 6, name: "Sapper", color: "#7fb83e", design: "medium", hp: 100, speed: 1, dmg: 100, cooldown: 1, bulletSpeed: 1, pierce: false, autoAim: false, mines: true, range: 100,
+      desc: "Lays mines (E or right-click), but its bullets only reach 100 pixels." },
   ];
+
+  function cleanTank(v) {
+    const n = Math.round(Number(v));
+    return n >= 1 && n <= TANK_TYPES.length ? n : 1;
+  }
+  const typeOf = (id) => TANK_TYPES[cleanTank(id) - 1];
+
   const BOT_NAMES = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"];
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
   const canvas = $("game");
-  const ctx = canvas.getContext("2d");
+  const ctx0 = canvas.getContext("2d");
+  let ctx = ctx0; // the game canvas, or a small preview canvas while a menu card is drawn
   const aliveEl = $("alive");
   const killsEl = $("kills");
   const roomChip = $("room-chip");
@@ -158,12 +187,24 @@
 
   // ---------- Input ----------
   const keys = new Set();
-  const mouse = { x: W / 2, y: H / 2, down: false };
+  const mouse = { x: W / 2, y: H / 2, down: false, mine: false };
 
   window.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement) return; // typing a name or code
     keys.add(e.code);
     if (e.code === "KeyR" && session.role === "solo") startRound();
+    // Space on the end-of-round screen starts a new solo game. A focused button
+    // keeps its own Space behaviour, so the round can't start twice.
+    if (e.code === "Space" && session.role === "solo" && !panels.end.hidden && !overlay.hidden
+        && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement)) {
+      e.preventDefault();
+      startRound();
+    }
+    // Once your tank is destroyed and only bots are left, Esc skips to the main menu
+    if (e.code === "Escape" && session.role === "solo" && state.running) {
+      const me = mine();
+      if (me && !me.alive) leaveMatch();
+    }
     if (e.code === "KeyM" && window.Sound) {
       Sound.toggleMute();
       updateHud();
@@ -171,15 +212,21 @@
     if (state.running && (e.code.startsWith("Arrow") || e.code === "Space")) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => keys.delete(e.code));
-  window.addEventListener("blur", () => { keys.clear(); mouse.down = false; });
+  window.addEventListener("blur", () => { keys.clear(); mouse.down = false; mouse.mine = false; });
 
   canvas.addEventListener("mousemove", (e) => {
     const r = canvas.getBoundingClientRect();
     mouse.x = ((e.clientX - r.left) / r.width) * W;
     mouse.y = ((e.clientY - r.top) / r.height) * H;
   });
-  canvas.addEventListener("mousedown", (e) => { if (e.button === 0) mouse.down = true; });
-  window.addEventListener("mouseup", (e) => { if (e.button === 0) mouse.down = false; });
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 0) mouse.down = true;
+    if (e.button === 2) mouse.mine = true; // right-click lays a mine
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 0) mouse.down = false;
+    if (e.button === 2) mouse.mine = false;
+  });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
   // ---------- Helpers ----------
@@ -318,6 +365,7 @@
     round: 0,
     entities: [],
     bullets: [],
+    mines: [],
     particles: [],
     wrecks: [],
     countdown: 0,
@@ -333,15 +381,20 @@
   const displayName = (e) => (isMine(e) ? "You" : e.name);
   const tag = (e) => `<b style="color:${e.color}">${esc(displayName(e))}</b>`;
 
-  // r: { id, pid, name, color, tankKey, x, y }
+  // r: { id, pid, name, type, x, y }
   function makeEntity(r, withAi) {
     const angle = Math.atan2(H / 2 - r.y, W / 2 - r.x);
+    const spec = typeOf(r.type);
     return {
       id: r.id,
       pid: r.pid || null,
       name: r.name,
-      color: /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : "#a7b0ba",
-      tank: TANKS[r.tankKey] || TANKS.medium,
+      spec,
+      color: spec.color,
+      tank: TANKS[spec.design], // the look; spec holds what the tank can do
+      hp: spec.hp,
+      flash: 0,
+      mineCd: 0,
       x: r.x, y: r.y,
       px: r.x, py: r.y,
       vx: 0, vy: 0,
@@ -369,18 +422,18 @@
   // Host and solo: build a fresh round and tell everyone about it.
   function startRound() {
     const humans = session.role === "solo"
-      ? [{ pid: session.myPid, name: myName() }]
+      ? [{ pid: session.myPid, name: myName(), tank: myTank }]
       : session.players.slice(0, MAX_PLAYERS);
     const spawns = shuffle(SPAWNS.slice());
     let bot = 0;
-    const roster = SLOTS.map((slot, i) => {
+    const roster = SPAWNS.map((_, i) => {
       const h = humans[i];
       return {
         id: i,
         pid: h ? h.pid : null,
         name: h ? h.name : "Bot " + BOT_NAMES[bot++],
-        color: slot.color,
-        tankKey: slot.tank,
+        // Players fly their chosen tank; bots get a random one
+        type: h ? cleanTank(h.tank) : 1 + Math.floor(Math.random() * TANK_TYPES.length),
         x: spawns[i].x,
         y: spawns[i].y,
       };
@@ -397,6 +450,7 @@
   function beginRound(roster, withAi) {
     state.entities = roster.map((r) => makeEntity(r, withAi && !r.pid));
     state.bullets = [];
+    state.mines = [];
     state.particles = [];
     state.wrecks = [];
     state.countdown = COUNTDOWN;
@@ -416,18 +470,53 @@
   function shoot(e, spread) {
     const a = e.angle + rand(-spread, spread);
     const t = e.tank;
+    const speed = BULLET_SPEED * e.spec.bulletSpeed;
     // Twin-barrel tanks alternate between left and right barrels
     const side = t.twin ? (e.shotSide *= -1) * 3.5 : 0;
     state.bullets.push({
       x: e.x + Math.cos(e.angle) * (t.bl + 2) - Math.sin(e.angle) * side,
       y: e.y + Math.sin(e.angle) * (t.bl + 2) + Math.cos(e.angle) * side,
-      vx: Math.cos(a) * BULLET_SPEED,
-      vy: Math.sin(a) * BULLET_SPEED,
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed,
       owner: e.id,
-      life: BULLET_LIFE,
+      life: e.spec.range ? e.spec.range / speed : BULLET_LIFE, // short-range bullets vanish after their range
+      dmg: e.spec.dmg,
+      pierce: e.spec.pierce,
     });
     e.muzzle = 0.06;
     if (isMine(e) && window.Sound) Sound.shot();
+  }
+
+  // Take hit points off a tank; it is destroyed when none are left
+  function damage(victim, killer, amount) {
+    victim.hp -= amount;
+    if (victim.hp > 0) {
+      victim.flash = 0.15;
+      return;
+    }
+    victim.hp = 0;
+    kill(victim, killer);
+  }
+
+  function placeMine(e) {
+    e.mineCd = MINE_COOLDOWN;
+    state.mines.push({ x: e.x, y: e.y, owner: e.id, age: 0 });
+    const own = state.mines.filter((m) => m.owner === e.id);
+    if (own.length > MINE_MAX) state.mines.splice(state.mines.indexOf(own[0]), 1);
+  }
+
+  // Mines arm after a moment, then go off when any tank except their owner comes close
+  function updateMines(dt) {
+    if (state.over) return;
+    for (const m of state.mines.slice()) {
+      m.age += dt;
+      if (m.age < MINE_ARM_TIME) continue;
+      const victim = state.entities.find((e) => e.alive && e.id !== m.owner && Math.hypot(e.x - m.x, e.y - m.y) < MINE_RADIUS);
+      if (!victim) continue;
+      state.mines.splice(state.mines.indexOf(m), 1);
+      spark(m.x, m.y, "#ffb347", 22);
+      damage(victim, state.entities[m.owner], MINE_DAMAGE);
+    }
   }
 
   function kill(victim, killer) {
@@ -456,8 +545,9 @@
     addFeed(killer ? `${tag(killer)} destroyed ${tag(victim)}` : `${tag(victim)} left the match`);
 
     if (isMine(victim)) {
+      if (window.Sound) Sound.destroyed();
       const how = killer ? `Shot by ${esc(killer.name)}` : "";
-      const next = session.role === "solo" ? "press R to restart" : "spectating until the round ends";
+      const next = session.role === "solo" ? "R to restart · Esc for the main menu" : "spectating until the round ends";
       bannerEl.innerHTML = `<span style="color:#ff6b6b">DESTROYED</span><small>${how ? how + " · " : ""}${next}</small>`;
     }
     updateHud();
@@ -492,6 +582,7 @@
 
     const isClient = session.role === "client";
     $("again").hidden = isClient;
+    $("again").textContent = session.role === "solo" ? "Play again · Space" : "Play again";
     $("end-wait").hidden = !isClient;
     $("end-map").hidden = isClient;
     $("end-leave").textContent = session.role === "solo" ? "Main menu" : "Leave match";
@@ -519,7 +610,7 @@
   }
 
   // ---------- Simulation (host and solo) ----------
-  const NO_INPUT = { u: 0, d: 0, l: 0, r: 0, f: 0, a: null };
+  const NO_INPUT = { u: 0, d: 0, l: 0, r: 0, f: 0, m: 0, a: null };
 
   function localInput(e) {
     return {
@@ -528,6 +619,7 @@
       l: keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0,
       r: keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0,
       f: mouse.down ? 1 : 0,
+      m: keys.has("KeyE") || mouse.mine ? 1 : 0,
       a: Math.atan2(mouse.y - e.y, mouse.x - e.x),
     };
   }
@@ -536,23 +628,59 @@
   function cleanInput(m) {
     const b = (v) => (v ? 1 : 0);
     const a = Number(m.a);
-    return { u: b(m.u), d: b(m.d), l: b(m.l), r: b(m.r), f: b(m.f), a: Number.isFinite(a) ? a : null };
+    return { u: b(m.u), d: b(m.d), l: b(m.l), r: b(m.r), f: b(m.f), m: b(m.m), a: Number.isFinite(a) ? a : null };
   }
 
   function inputFor(e) {
     return e.pid === session.myPid ? localInput(e) : session.inputs.get(e.pid) || NO_INPUT;
   }
 
+  // Angle to shoot at to hit a moving target; `lead` is how much of the target's movement to account for
+  function leadAngle(from, target, bulletSpeed, lead) {
+    const t = dist(from, target) / bulletSpeed;
+    return Math.atan2(target.y + target.vy * t * lead - from.y, target.x + target.vx * t * lead - from.x);
+  }
+
+  // The nearest enemy a tank with auto-aim can see
+  function autoTarget(e) {
+    let best = null, bestD = AUTO_AIM_RANGE;
+    for (const o of state.entities) {
+      if (!o.alive || o === e) continue;
+      const d = dist(e, o);
+      if (d < bestD && hasLineOfSight(e, o)) { best = o; bestD = d; }
+    }
+    return best;
+  }
+
   function applyInput(e, input, dt, canFire) {
+    const spec = e.spec;
     const mx = input.r - input.l, my = input.d - input.u;
     const len = Math.hypot(mx, my) || 1;
-    e.x += (mx / len) * PLAYER_SPEED * dt;
-    e.y += (my / len) * PLAYER_SPEED * dt;
-    if (input.a !== null) e.angle = input.a;
-    if (canFire && input.f && e.cooldown <= 0) {
-      shoot(e, 0.02);
-      e.cooldown = PLAYER_COOLDOWN;
+    const speed = PLAYER_SPEED * spec.speed;
+    e.x += (mx / len) * speed * dt;
+    e.y += (my / len) * speed * dt;
+
+    let aim = input.a;
+    let locked = false;
+    if (spec.autoAim) {
+      // The turret swings onto the nearest visible enemy by itself
+      const target = autoTarget(e);
+      if (target) {
+        aim = leadAngle(e, target, BULLET_SPEED * spec.bulletSpeed, 0.8);
+        locked = true;
+      }
     }
+    if (aim !== null) {
+      if (locked) e.angle += clamp(angleDiff(e.angle, aim), -14 * dt, 14 * dt);
+      else e.angle = aim;
+    }
+
+    const onTarget = !locked || Math.abs(angleDiff(e.angle, aim)) < 0.12;
+    if (canFire && input.f && onTarget && e.cooldown <= 0) {
+      shoot(e, locked ? 0 : 0.02);
+      e.cooldown = PLAYER_COOLDOWN * spec.cooldown;
+    }
+    if (spec.mines && canFire && input.m && e.mineCd <= 0) placeMine(e);
   }
 
   function findTarget(bot) {
@@ -560,7 +688,7 @@
     for (const e of state.entities) {
       if (!e.alive || e === bot) continue;
       const d = dist(bot, e);
-      if (d < bestD && hasLineOfSight(bot, e)) { best = e; bestD = d; }
+      if (d < bestD && (bot.spec.pierce || hasLineOfSight(bot, e))) { best = e; bestD = d; }
     }
     return best;
   }
@@ -575,6 +703,8 @@
 
   function updateBot(bot, dt, canFire) {
     const ai = bot.ai;
+    const spec = bot.spec;
+    const speed = BOT_SPEED * spec.speed;
     const target = findTarget(bot);
 
     if (target) {
@@ -585,19 +715,19 @@
       const d = dist(bot, target);
 
       // Aim with partial lead
-      const t = d / BULLET_SPEED;
-      const aimX = target.x + target.vx * t * 0.6;
-      const aimY = target.y + target.vy * t * 0.6;
-      const desired = Math.atan2(aimY - bot.y, aimX - bot.x);
+      const desired = leadAngle(bot, target, BULLET_SPEED * spec.bulletSpeed, 0.6);
       const diff = angleDiff(bot.angle, desired);
       const turn = 7 * dt;
       bot.angle += clamp(diff, -turn, turn);
 
+      // Short-range bullets only fire once the target is in reach
+      const inReach = !spec.range || d <= spec.range + 10;
       ai.reaction -= dt;
-      if (canFire && ai.reaction <= 0 && Math.abs(diff) < 0.15 && bot.cooldown <= 0) {
-        shoot(bot, ai.accuracy);
-        bot.cooldown = ai.fireRate + rand(0, 0.25);
+      if (canFire && inReach && ai.reaction <= 0 && Math.abs(diff) < 0.15 && bot.cooldown <= 0) {
+        shoot(bot, ai.accuracy * (spec.autoAim ? 0.4 : 1));
+        bot.cooldown = (ai.fireRate + rand(0, 0.25)) * spec.cooldown;
       }
+      if (canFire && spec.mines && bot.mineCd <= 0 && d < 280 && Math.random() < dt * 1.5) placeMine(bot);
 
       // Strafe around the target, keeping a fighting distance
       ai.strafeTimer -= dt;
@@ -605,21 +735,24 @@
         ai.strafeDir *= -1;
         ai.strafeTimer = rand(0.5, 1.4);
       }
+      const far = spec.range ? spec.range * 0.8 : 330;
+      const near = spec.range ? spec.range * 0.4 : 180;
       const toX = (target.x - bot.x) / d, toY = (target.y - bot.y) / d;
       let mx = -toY * ai.strafeDir, my = toX * ai.strafeDir;
-      if (d > 330) { mx += toX; my += toY; }
-      else if (d < 180) { mx -= toX; my -= toY; }
+      if (d > far) { mx += toX; my += toY; }
+      else if (d < near) { mx -= toX; my -= toY; }
       const len = Math.hypot(mx, my) || 1;
-      bot.x += (mx / len) * BOT_SPEED * dt;
-      bot.y += (my / len) * BOT_SPEED * dt;
+      bot.x += (mx / len) * speed * dt;
+      bot.y += (my / len) * speed * dt;
       ai.waypoint = { x: target.x, y: target.y }; // chase last known position if lost
     } else {
       ai.targetId = null;
       if (dist(bot, ai.waypoint) < 25) newWaypoint(bot);
-      moveToward(bot, ai.waypoint.x, ai.waypoint.y, BOT_SPEED * 0.85, dt);
+      moveToward(bot, ai.waypoint.x, ai.waypoint.y, speed * 0.85, dt);
       const desired = Math.atan2(ai.waypoint.y - bot.y, ai.waypoint.x - bot.x);
       const turn = 5 * dt;
       bot.angle += clamp(angleDiff(bot.angle, desired), -turn, turn);
+      if (canFire && spec.mines && bot.mineCd <= 0 && Math.random() < dt * 0.3) placeMine(bot);
     }
 
     // Stuck detection: if barely moved in a second, pick a new waypoint
@@ -675,9 +808,11 @@
 
       // Find the nearest thing this segment hits (wall or entity)
       let hitT = Infinity, hitEntity = null;
-      for (const w of WALLS) {
-        const t = segHitsRect(x1, y1, x2, y2, w);
-        if (t >= 0) hitT = Math.min(hitT, t);
+      if (!b.pierce) {
+        for (const w of WALLS) {
+          const t = segHitsRect(x1, y1, x2, y2, w);
+          if (t >= 0) hitT = Math.min(hitT, t);
+        }
       }
       const outside = x2 < 0 || x2 > W || y2 < 0 || y2 > H;
 
@@ -693,7 +828,7 @@
 
       if (hitEntity) {
         b.life = 0;
-        kill(hitEntity.e, state.entities[b.owner]);
+        damage(hitEntity.e, state.entities[b.owner], b.dmg);
         spark(x1 + (x2 - x1) * hitEntity.t, y1 + (y2 - y1) * hitEntity.t, "#ffffff");
       } else if (hitT !== Infinity) {
         b.life = 0;
@@ -707,15 +842,15 @@
     state.bullets = state.bullets.filter((b) => b.life > 0);
   }
 
-  function spark(x, y, color) {
-    sparkEffect(x, y, color);
-    broadcast({ t: "ev", k: "spark", x: Math.round(x), y: Math.round(y), c: color });
+  function spark(x, y, color, n = 6) {
+    sparkEffect(x, y, color, n);
+    broadcast({ t: "ev", k: "spark", x: Math.round(x), y: Math.round(y), c: color, n });
   }
 
-  function sparkEffect(x, y, color) {
-    for (let i = 0; i < 6; i++) {
-      const a = rand(0, Math.PI * 2), s = rand(40, 160);
-      state.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.25, max: 0.25, color });
+  function sparkEffect(x, y, color, n = 6) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, Math.PI * 2), s = rand(40, n > 6 ? 300 : 160);
+      state.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: n > 6 ? 0.5 : 0.25, max: n > 6 ? 0.5 : 0.25, color });
     }
   }
 
@@ -727,6 +862,8 @@
     for (const e of living) {
       e.px = e.x; e.py = e.y;
       e.cooldown -= dt;
+      e.mineCd -= dt;
+      e.flash -= dt;
       e.muzzle -= dt;
       if (e.pid) {
         const input = inputFor(e);
@@ -747,6 +884,7 @@
     }
 
     updateBullets(dt);
+    updateMines(dt);
 
     if (session.role === "host") {
       session.sendTimer += dt;
@@ -770,14 +908,15 @@
       r: state.round,
       cd: r3(Math.max(0, state.countdown)),
       e: state.entities.map((e) => [
-        e.id, r1(e.x), r1(e.y), r3(e.angle), r3(e.hullAngle), r1(e.tread), e.alive ? 1 : 0, e.muzzle > 0 ? 1 : 0,
+        e.id, r1(e.x), r1(e.y), r3(e.angle), r3(e.hullAngle), r1(e.tread), e.alive ? 1 : 0, e.muzzle > 0 ? 1 : 0, r1(e.hp),
       ]),
-      b: state.bullets.map((b) => [r1(b.x), r1(b.y), Math.round(b.vx), Math.round(b.vy)]),
+      b: state.bullets.map((b) => [r1(b.x), r1(b.y), Math.round(b.vx), Math.round(b.vy), b.owner]),
+      mi: state.mines.map((m) => [r1(m.x), r1(m.y), m.owner, m.age >= MINE_ARM_TIME ? 1 : 0]),
     };
   }
 
   function lobbyMessage() {
-    return { t: "lobby", map: currentMap.id, players: session.players.map(({ pid, name }) => ({ pid, name })) };
+    return { t: "lobby", map: currentMap.id, players: session.players.map(({ pid, name, tank }) => ({ pid, name, tank })) };
   }
 
   function broadcastLobby() {
@@ -798,13 +937,19 @@
           session.net.kick(pid);
           return;
         }
-        session.players.push({ pid, name: cleanName(msg.name), lastSeen: performance.now() });
+        session.players.push({ pid, name: cleanName(msg.name), tank: cleanTank(msg.tank), lastSeen: performance.now() });
         session.net.send(pid, { t: "welcome" });
         broadcastLobby();
         // Joining mid-round: watch until the next round starts
         if (state.running && !state.over && session.lastStart) session.net.send(pid, session.lastStart);
         break;
       }
+      case "pick":
+        if (player) {
+          player.tank = cleanTank(msg.tank);
+          broadcastLobby();
+        }
+        break;
       case "in":
         if (player) session.inputs.set(pid, cleanInput(msg));
         break;
@@ -858,7 +1003,7 @@
         break;
       case "ev": {
         const v = state.entities[msg.v];
-        if (msg.k === "spark") sparkEffect(msg.x, msg.y, msg.c);
+        if (msg.k === "spark") sparkEffect(msg.x, msg.y, msg.c, msg.n);
         else if (v && v.alive) {
           Object.assign(v, { x: msg.x, y: msg.y, angle: msg.a, hullAngle: msg.ha, alive: false });
           killEffects(v, msg.k === "kill" ? state.entities[msg.by] : null);
@@ -876,16 +1021,22 @@
   function applySnapshot(m) {
     if (m.r !== state.round || !state.running) return;
     state.countdown = m.cd;
-    for (const [id, x, y, a, ha, tread, isAlive, muzzle] of m.e) {
+    for (const [id, x, y, a, ha, tread, isAlive, muzzle, hp] of m.e) {
       const e = state.entities[id];
       if (!e) continue;
+      if (hp < e.hp) e.flash = 0.15; // took a hit that didn't destroy it
+      e.hp = hp;
       if (e.tx === undefined) { e.x = x; e.y = y; e.hullAngle = ha; }
       e.tx = x; e.ty = y; e.ta = a; e.tha = ha;
       e.tread = tread;
       if (!isAlive) e.alive = false;
       if (muzzle) e.muzzle = 0.06;
     }
-    state.bullets = m.b.map(([x, y, vx, vy]) => ({ x, y, vx, vy, life: 1 }));
+    state.bullets = m.b.map(([x, y, vx, vy, owner]) => {
+      const o = state.entities[owner];
+      return { x, y, vx, vy, owner, life: 1, pierce: !!(o && o.spec.pierce) };
+    });
+    state.mines = m.mi.map(([x, y, owner, armed]) => ({ x, y, owner, age: armed ? MINE_ARM_TIME : 0 }));
   }
 
   // Smoothly move everything toward the latest snapshot, and keep bullets flying between snapshots
@@ -894,18 +1045,19 @@
     const k = Math.min(1, dt * 18);
     for (const e of state.entities) {
       e.muzzle -= dt;
+      e.flash -= dt;
       if (e.tx === undefined) continue;
       e.x += (e.tx - e.x) * k;
       e.y += (e.ty - e.y) * k;
       e.hullAngle += angleDiff(e.hullAngle, e.tha) * k;
-      // Your own turret follows your mouse straight away
-      if (isMine(e) && e.alive) e.angle = Math.atan2(mouse.y - e.y, mouse.x - e.x);
+      // Your own turret follows your mouse straight away (an auto-aim turret follows the host's aim)
+      if (isMine(e) && e.alive && !e.spec.autoAim) e.angle = Math.atan2(mouse.y - e.y, mouse.x - e.x);
       else e.angle += angleDiff(e.angle, e.ta) * k;
     }
 
     for (const b of state.bullets) {
       const x2 = b.x + b.vx * dt, y2 = b.y + b.vy * dt;
-      if (WALLS.some((w) => segHitsRect(b.x, b.y, x2, y2, w) >= 0) || x2 < 0 || x2 > W || y2 < 0 || y2 > H) b.life = 0;
+      if ((!b.pierce && WALLS.some((w) => segHitsRect(b.x, b.y, x2, y2, w) >= 0)) || x2 < 0 || x2 > W || y2 < 0 || y2 > H) b.life = 0;
       b.x = x2; b.y = y2;
     }
     state.bullets = state.bullets.filter((b) => b.life > 0);
@@ -917,7 +1069,7 @@
     if (me && me.alive) {
       me.cooldown -= dt;
       if (mouse.down && state.countdown <= 0 && !state.over && me.cooldown <= 0) {
-        me.cooldown = PLAYER_COOLDOWN;
+        me.cooldown = PLAYER_COOLDOWN * me.spec.cooldown;
         if (window.Sound) Sound.shot();
       }
     }
@@ -977,6 +1129,70 @@
     });
   }
 
+  // ---------- Tank picker ----------
+  const TANK_KEY = "last-one-standing-tank";
+  let myTank = 1;
+  try { myTank = cleanTank(localStorage.getItem(TANK_KEY)); } catch {}
+
+  // Draw a tank into a small canvas, for the picker cards
+  function drawTankPreview(cv, spec) {
+    const t = TANKS[spec.design];
+    const prev = ctx;
+    ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.save();
+    ctx.translate(cv.width / 2 - 8, cv.height / 2);
+    ctx.scale(1.95, 1.95);
+    drawTracks(t, 0, "#2b2e33", "#15171b");
+    drawHull(t, spec.color, shade(spec.color, -0.45));
+    drawBarrels(t, shade(spec.color, -0.25), shade(spec.color, -0.6));
+    drawTurret(t, shade(spec.color, 0.12), shade(spec.color, -0.55));
+    ctx.restore();
+    ctx = prev;
+  }
+
+  function refreshPickers() {
+    for (const card of document.querySelectorAll(".tank-card")) {
+      const on = Number(card.dataset.tank) === myTank;
+      card.classList.toggle("selected", on);
+      card.setAttribute("aria-checked", String(on));
+    }
+    for (const d of document.querySelectorAll(".tank-desc")) d.textContent = typeOf(myTank).desc;
+  }
+
+  function selectTank(n) {
+    myTank = cleanTank(n);
+    try { localStorage.setItem(TANK_KEY, String(myTank)); } catch {}
+    refreshPickers();
+    if (session.role === "host") {
+      if (session.players[0]) session.players[0].tank = myTank;
+      broadcastLobby();
+    } else if (session.role === "client") {
+      session.net.send({ t: "pick", tank: myTank });
+    }
+  }
+
+  for (const picker of document.querySelectorAll(".tank-picker")) {
+    for (const spec of TANK_TYPES) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "tank-card";
+      card.dataset.tank = spec.id;
+      card.setAttribute("role", "radio");
+      const cv = document.createElement("canvas");
+      cv.width = 132;
+      cv.height = 72;
+      const name = document.createElement("span");
+      name.className = "tank-name";
+      name.textContent = `${spec.id} · ${spec.name}`;
+      card.append(cv, name);
+      card.addEventListener("click", () => selectTank(spec.id));
+      picker.appendChild(card);
+      drawTankPreview(cv, spec);
+    }
+  }
+  refreshPickers();
+
   function myName() {
     return cleanName(nameInput.value);
   }
@@ -1005,19 +1221,21 @@
   function renderLobby() {
     const list = $("player-list");
     list.innerHTML = "";
-    SLOTS.forEach((slot, i) => {
+    for (let i = 0; i < MAX_PLAYERS; i++) {
       const p = session.players[i];
       const li = document.createElement("li");
       if (!p) li.className = "bot";
       const tags = [];
       if (p && i === 0) tags.push("Host");
       if (p && p.pid === session.myPid) tags.push("You");
+      const spec = p ? typeOf(p.tank) : null;
       li.innerHTML =
-        `<span class="swatch" style="background:${slot.color}"></span>` +
+        `<span class="swatch" style="background:${spec ? spec.color : "#5a6272"}"></span>` +
         `<span class="pname">${p ? esc(p.name) : "Bot"}</span>` +
-        `<span class="tag">${tags.join(" · ")}</span>`;
+        `<span class="tag">${tags.join(" · ")}</span>` +
+        `<span class="tag tank-tag">${spec ? `${spec.id} · ${spec.name}` : "Random tank"}</span>`;
       list.appendChild(li);
-    });
+    }
     const isHost = session.role === "host";
     $("start").hidden = !isHost;
     $("map-lobby").disabled = !isHost;
@@ -1034,7 +1252,7 @@
       players: [], lastStart: null, lastHostMsg: 0, sendTimer: 0,
     });
     session.inputs.clear();
-    Object.assign(state, { running: false, entities: [], bullets: [], particles: [], wrecks: [], over: false, countdown: 0 });
+    Object.assign(state, { running: false, entities: [], bullets: [], mines: [], particles: [], wrecks: [], over: false, countdown: 0 });
     setMap(savedMap());
     feedEl.innerHTML = "";
     bannerEl.innerHTML = "";
@@ -1055,7 +1273,7 @@
     try {
       const net = await Net.host({ onMessage: onClientMessage, onLeave: onClientLeave });
       Object.assign(session, { role: "host", net, code: net.code, myPid: "host" });
-      session.players = [{ pid: "host", name: myName(), lastSeen: Infinity }];
+      session.players = [{ pid: "host", name: myName(), tank: myTank, lastSeen: Infinity }];
       setMenuStatus("");
       enterLobby();
     } catch (err) {
@@ -1084,7 +1302,7 @@
         onClose: () => { if (session.role === "client") leaveMatch("The host closed the match."); },
       });
       Object.assign(session, { role: "client", net, code, myPid: net.pid, lastHostMsg: performance.now() });
-      net.send({ t: "hello", name: myName() });
+      net.send({ t: "hello", name: myName(), tank: myTank });
       setMenuStatus("Joining…");
     } catch (err) {
       setMenuStatus(err.message, true);
@@ -1293,7 +1511,25 @@
       }
     }
     drawTurret(t, shade(e.color, 0.12), shade(e.color, -0.55));
+    if (e.flash > 0) {
+      // Brief white flash when a hit doesn't destroy the tank
+      ctx.globalAlpha = Math.min(1, e.flash / 0.15) * 0.7;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(0, 0, t.L * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
+
+    // health bar, for tanks that have taken damage or have extra health
+    if (e.hp < e.spec.hp || e.spec.hp > 100) {
+      const w = 30, x = e.x - w / 2, y = e.y + t.Wd / 2 + 7, f = clamp(e.hp / e.spec.hp, 0, 1);
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(x - 1, y - 1, w + 2, 6);
+      ctx.fillStyle = f > 0.5 ? "#7fb83e" : f > 0.25 ? "#d9a441" : "#d0644a";
+      ctx.fillRect(x, y, w * f, 4);
+    }
 
     // name tag
     const tagY = e.y - t.Wd / 2 - 10;
@@ -1327,19 +1563,57 @@
     ctx.restore();
   }
 
+  // "#rrggbb" as an rgba() string
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // Bullets take the colour of the tank that fired them
   function drawBullets() {
     ctx.lineCap = "round";
     for (const b of state.bullets) {
-      const tx = b.x - b.vx * 0.025, ty = b.y - b.vy * 0.025;
+      const o = state.entities[b.owner];
+      const col = o ? o.color : "#ffe08a";
+      const tx = b.x - b.vx * 0.03, ty = b.y - b.vy * 0.03;
       const g = ctx.createLinearGradient(tx, ty, b.x, b.y);
-      g.addColorStop(0, "rgba(255,230,140,0)");
-      g.addColorStop(1, "#fff6c8");
+      g.addColorStop(0, hexA(col, 0));
+      g.addColorStop(1, col);
       ctx.strokeStyle = g;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(tx, ty);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
+      ctx.fillStyle = shade(col, 0.55);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawMines() {
+    for (const m of state.mines) {
+      const o = state.entities[m.owner];
+      const col = o ? o.color : "#ffb347";
+      const armed = m.age >= MINE_ARM_TIME;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath();
+      ctx.arc(m.x + 2, m.y + 3, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#2b2e33";
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = col;
+      ctx.stroke();
+      // The light blinks once the mine is armed
+      const on = armed && Math.floor(performance.now() / 350) % 2 === 0;
+      ctx.fillStyle = armed ? (on ? "#ff5a4a" : "#7a2a24") : "#5a6272";
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -1369,6 +1643,7 @@
     drawFloor();
     for (const w of state.wrecks) drawWreck(w);
     drawWalls();
+    drawMines();
     drawParticles();
     for (const e of state.entities) if (e.alive) drawTank(e);
     drawBullets();

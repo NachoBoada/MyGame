@@ -6,8 +6,9 @@
 
   const MUTE_KEY = "last-one-standing-muted";
   let ac = null;
-  let master = null;
-  let shotBuffer = null; // the decoded shot sound from shot-sound.js
+  let master = null; // shots: compressed, then halved
+  let direct = null; // other effects: played at their own volume
+  const buffers = {}; // decoded sounds by name
   let muted = false;
   try { muted = localStorage.getItem(MUTE_KEY) === "1"; } catch {}
 
@@ -16,6 +17,13 @@
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes.buffer;
+  }
+
+  function load(name, b64) {
+    if (!b64) return;
+    ac.decodeAudioData(decodeBase64(b64))
+      .then((buf) => { buffers[name] = buf; })
+      .catch(() => {}); // the game still works without sound
   }
 
   function unlock() {
@@ -33,13 +41,26 @@
       const volume = ac.createGain();
       volume.gain.value = 0.5;
       master.connect(comp).connect(volume).connect(ac.destination);
-      if (window.SHOT_SOUND_WAV) {
-        ac.decodeAudioData(decodeBase64(window.SHOT_SOUND_WAV))
-          .then((buf) => { shotBuffer = buf; })
-          .catch(() => {}); // the game still works without sound
-      }
+      direct = ac.destination;
+      load("shot", window.SHOT_SOUND_WAV);
+      load("destroyed", window.DESTROYED_SOUND_WAV);
     }
     if (ac.state === "suspended") ac.resume();
+  }
+
+  function play(name, out, gain = 1) {
+    const buf = buffers[name];
+    if (muted || !buf || ac.state !== "running") return;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    if (gain === 1) {
+      src.connect(out);
+    } else {
+      const g = ac.createGain();
+      g.gain.value = gain;
+      src.connect(g).connect(out);
+    }
+    src.start();
   }
 
   window.addEventListener("pointerdown", unlock);
@@ -47,18 +68,14 @@
 
   window.Sound = {
     get muted() { return muted; },
-    get ready() { return !!shotBuffer; },
+    get ready() { return !!(buffers.shot && buffers.destroyed); },
     toggleMute() {
       muted = !muted;
       try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch {}
       return muted;
     },
-    shot() {
-      if (muted || !shotBuffer || ac.state !== "running") return;
-      const src = ac.createBufferSource();
-      src.buffer = shotBuffer;
-      src.connect(master);
-      src.start();
-    },
+    shot() { play("shot", master); },
+    // Your tank was destroyed: the sound file at 70% of its own volume
+    destroyed() { play("destroyed", direct, 0.7); },
   };
 })();

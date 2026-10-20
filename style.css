@@ -110,7 +110,7 @@ html, body {
   padding: 28px 32px;
   text-align: center;
   width: 100%;
-  max-width: 460px;
+  max-width: 520px;
   max-height: 100%;
   overflow-y: auto;
   display: flex;
@@ -222,4 +222,37 @@ button.ghost { background: transparent; }
 @media (max-width: 520px) {
   .panel { padding: 22px 18px; }
   .join-row, .invite { flex-direction: column; }
+}
+
+.tank-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tank-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #cfd6e4;
+  background: #1e2430;
+  border: 2px solid transparent;
+  border-radius: 10px;
+}
+
+.tank-card canvas { height: 52px; width: auto; max-width: 100%; }
+.tank-card:hover:not(:disabled) { background: #262e3d; }
+.tank-card.selected { border-color: #7fb83e; background: #212a2a; color: #fff; }
+
+.tank-desc { font-size: 13px; min-height: 2.9em; text-align: left; }
+
+@media (max-height: 860px) {
+  .panel { gap: 10px; padding: 18px 24px; }
+  .panel h1 { font-size: 26px; }
+  .tank-card canvas { height: 44px; }
+  .panel .controls, .panel .lede { font-size: 13px; }
 }

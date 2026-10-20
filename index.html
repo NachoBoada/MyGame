@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Last One Standing</title>
     <!-- Bump ?v= on every release so browsers fetch the new files instead of cached ones -->
-    <link rel="stylesheet" href="style.css?v=3" />
+    <link rel="stylesheet" href="style.css?v=6" />
   </head>
   <body>
     <div id="wrap">
@@ -15,7 +15,7 @@
         <div id="alive">Alive: 6</div>
         <div id="kills">Kills: 0</div>
         <div id="room-chip" hidden></div>
-        <div id="sound-chip" hidden>Sound off · M</div>
+        <div id="sound-chip" hidden>Sound is off · M</div>
       </div>
       <div id="feed"></div>
       <div id="banner"></div>
@@ -26,10 +26,10 @@
           <h1>Last One Standing</h1>
           <p class="lede">
             Tank battle for up to 6 players. Empty slots are filled with bots.
-            One shot destroys any tank, so be the last one left.
+            Pick a tank with its own strengths and weaknesses, then be the last one left.
           </p>
           <p class="controls">
-            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>M</b> sound on/off
+            <b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>E</b> / right-click lay a mine (tank 6) &nbsp;·&nbsp; <b>M</b> sound on/off
           </p>
 
           <label class="field" for="name">
@@ -41,6 +41,12 @@
             <span>Map</span>
             <select id="map-menu" class="map-select"></select>
           </label>
+
+          <div class="field">
+            <span>Your tank</span>
+            <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
+            <p class="tank-desc" aria-live="polite"></p>
+          </div>
 
           <div class="actions">
             <button id="create" class="primary">Create online match</button>
@@ -68,6 +74,11 @@
             <span>Map</span>
             <select id="map-lobby" class="map-select"></select>
           </label>
+          <div class="field">
+            <span>Your tank</span>
+            <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
+            <p class="tank-desc" aria-live="polite"></p>
+          </div>
           <ul id="player-list"></ul>
           <p id="lobby-hint" class="status"></p>
           <div class="actions row">
@@ -85,6 +96,11 @@
             <span>Map for the next round</span>
             <select id="map-end" class="map-select"></select>
           </label>
+          <div class="field">
+            <span>Your tank</span>
+            <div class="tank-picker" role="radiogroup" aria-label="Your tank"></div>
+            <p class="tank-desc" aria-live="polite"></p>
+          </div>
           <div class="actions row">
             <button id="again" class="primary">Play again</button>
             <button id="end-leave" class="ghost">Leave</button>
@@ -93,9 +109,10 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
-    <script src="net.js?v=3"></script>
-    <script src="shot-sound.js?v=3"></script>
-    <script src="sound.js?v=3"></script>
-    <script src="game.js?v=3"></script>
+    <script src="net.js?v=4"></script>
+    <script src="shot-sound.js?v=4"></script>
+    <script src="destroyed-sound.js?v=4"></script>
+    <script src="sound.js?v=4"></script>
+    <script src="game.js?v=7"></script>
   </body>
 </html>
