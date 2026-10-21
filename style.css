@@ -65,6 +65,8 @@ html, body {
   top: 18%;
   left: 50%;
   transform: translateX(-50%);
+  width: max-content;
+  max-width: 86%; /* long messages wrap onto a second line */
   font-size: 44px;
   font-weight: 800;
   text-align: center;

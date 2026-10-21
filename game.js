@@ -193,6 +193,66 @@
     "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec",
   ];
 
+  // Hands out the messages of a list one by one in random order, like dealing a shuffled deck.
+  // A message is not repeated until every message in the list has been used; then the deck is
+  // shuffled again and the cycle starts over. The deck is saved in this browser, so reloading
+  // the page doesn't restart the cycle.
+  function messageDeck(storageKey, list) {
+    let deck = []; // indexes of the messages not used yet in this cycle
+    let last = -1; // the message dealt most recently
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey));
+      const ok = saved && Array.isArray(saved.deck) && new Set(saved.deck).size === saved.deck.length
+        && saved.deck.every((i) => Number.isInteger(i) && i >= 0 && i < list.length);
+      if (ok) {
+        deck = saved.deck;
+        last = Number.isInteger(saved.last) ? saved.last : -1;
+      }
+    } catch {}
+
+    return function next() {
+      if (!deck.length) {
+        // A new cycle: all messages again, in a new random order. With more than one message,
+        // the first of the new cycle is never the one that ended the previous cycle.
+        deck = [...list.keys()];
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        if (list.length > 1 && deck[deck.length - 1] === last) {
+          [deck[0], deck[deck.length - 1]] = [deck[deck.length - 1], deck[0]];
+        }
+      }
+      last = deck.pop();
+      try { localStorage.setItem(storageKey, JSON.stringify({ deck, last })); } catch {}
+      return list[last];
+    };
+  }
+
+  // One of these is shown, in capitals, in the banner when your tank is destroyed
+  const DESTROYED_MESSAGES = [
+    "Sos choto",
+    "La tenes adentro",
+    "Ah, en esto tambien fracasas",
+    "Perdiste pero esta bien para un manco como vos",
+    "A COMERLAAA",
+    "No te regales bichito de luz",
+    "Si te gusta perder vas bien",
+    "Tranqui, nadie esperaba nada de vos",
+  ];
+
+  const nextDestroyedMessage = messageDeck("last-one-standing-destroyed-deck", DESTROYED_MESSAGES);
+
+  // One of these is shown, in capitals, when you win a round
+  const VICTORY_MESSAGES = [
+    "Bien, ganaste un jueguito choto",
+    "Ganaste un jueguito, desperdiciaste tu vida",
+    "GANASTE!! Anda a contarle a alguien que le importe",
+    "Felicitaciones pedazo de fracasado, ganaste",
+  ];
+
+  const nextVictoryMessage = messageDeck("last-one-standing-victory-deck", VICTORY_MESSAGES);
+
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
   const canvas = $("game");
@@ -432,6 +492,8 @@
     endTimer: 0,
     winnerId: -1,
     myKills: 0,
+    destroyedMessage: "", // the message shown when your tank was destroyed, reused on the end screen
+    victoryMessage: "", // the same for winning the round
     endShownAt: 0,
   };
 
@@ -548,6 +610,9 @@
     state.endTimer = 0;
     state.winnerId = -1;
     state.myKills = 0;
+    state.destroyedMessage = "";
+    state.victoryMessage = "";
+    if (window.Sound) Sound.stopSpeech();
     state.running = true;
     session.sendTimer = 0;
     feedEl.innerHTML = "";
@@ -636,9 +701,12 @@
 
     if (isMine(victim)) {
       if (window.Sound) Sound.destroyed();
+      const said = nextDestroyedMessage();
+      state.destroyedMessage = said.toUpperCase();
+      if (window.Sound) Sound.speak(said); // read aloud as written, so the voice doesn't spell out capitals
       const how = killer ? `Shot by ${esc(killer.name)}` : "";
       const next = session.role === "solo" ? "R to restart · Esc for the main menu" : "spectating until the round ends";
-      bannerEl.innerHTML = `<span style="color:#ff6b6b">DESTROYED</span><small>${how ? how + " · " : ""}${next}</small>`;
+      bannerEl.innerHTML = `<span style="color:#ff6b6b">${state.destroyedMessage}</span><small>${how ? how + " · " : ""}${next}</small>`;
     }
     updateHud();
   }
@@ -649,7 +717,18 @@
     state.over = true;
     state.endTimer = 1.2;
     state.winnerId = left[0] ? left[0].id : -1;
+    announceWinner();
     broadcast({ t: "end", w: state.winnerId });
+  }
+
+  // If you won, show a random message in the banner straight away; the end screen reuses it
+  function announceWinner() {
+    const winner = state.entities[state.winnerId];
+    if (!winner || !isMine(winner)) return;
+    const said = nextVictoryMessage();
+    state.victoryMessage = said.toUpperCase();
+    if (window.Sound) Sound.speak(said);
+    bannerEl.innerHTML = `<span style="color:#7fb83e">${state.victoryMessage}</span><small>You destroyed ${plural(state.myKills, "tank")}</small>`;
   }
 
   function showEnd() {
@@ -657,10 +736,10 @@
     const me = mine();
     const title = $("end-title");
     if (winner && isMine(winner)) {
-      title.textContent = "Victory!";
+      title.textContent = state.victoryMessage || "VICTORY!"; // the same message as the banner
       title.style.color = "#7fb83e";
     } else if (me) {
-      title.textContent = "Defeat";
+      title.textContent = state.destroyedMessage || "SOS CHOTO"; // the same message as the banner
       title.style.color = "#ff6b6b";
     } else {
       title.textContent = "Round over";
@@ -917,6 +996,19 @@
     e.tread += speed * dt * dir;
   }
 
+  // Where along this step (0 to 1) a bullet reaches the first wreck in its way, or Infinity
+  function wreckHit(b, x2, y2) {
+    let first = Infinity;
+    for (const w of state.wrecks) {
+      if (Math.hypot(b.x - w.x, b.y - w.y) <= RADIUS + 2) continue; // already on top of it
+      if (segPointDist(b.x, b.y, x2, y2, w.x, w.y) > RADIUS + 2) continue;
+      const dx = x2 - b.x, dy = y2 - b.y;
+      const t = clamp(((w.x - b.x) * dx + (w.y - b.y) * dy) / (dx * dx + dy * dy), 0, 1);
+      first = Math.min(first, t);
+    }
+    return first;
+  }
+
   function updateBullets(dt) {
     for (const b of state.bullets) {
       // Once the round is decided, remaining bullets can't kill the winner
@@ -933,6 +1025,10 @@
           if (t >= 0) hitT = Math.min(hitT, t);
         }
       }
+      // A wreck stops every bullet, including ones that pass through walls. A bullet fired from on
+      // top of a wreck isn't stopped by it, so a tank standing on a wreck can still shoot.
+      const wreckT = wreckHit(b, x2, y2);
+      if (wreckT !== Infinity) hitT = Math.min(hitT, wreckT);
       const outside = x2 < 0 || x2 > W || y2 < 0 || y2 > H;
 
       for (const e of state.entities) {
@@ -1158,6 +1254,7 @@
         state.over = true;
         state.endTimer = 1.2;
         state.winnerId = msg.w;
+        announceWinner();
         break;
     }
   }
@@ -1205,7 +1302,7 @@
 
     for (const b of state.bullets) {
       const x2 = b.x + b.vx * dt, y2 = b.y + b.vy * dt;
-      if ((!b.pierce && WALLS.some((w) => segHitsRect(b.x, b.y, x2, y2, w) >= 0)) || x2 < 0 || x2 > W || y2 < 0 || y2 > H) b.life = 0;
+      if ((!b.pierce && WALLS.some((w) => segHitsRect(b.x, b.y, x2, y2, w) >= 0)) || wreckHit(b, x2, y2) !== Infinity || x2 < 0 || x2 > W || y2 < 0 || y2 > H) b.life = 0;
       b.x = x2; b.y = y2;
     }
     state.bullets = state.bullets.filter((b) => b.life > 0);
@@ -1605,6 +1702,7 @@
     });
     session.inputs.clear();
     Object.assign(state, { running: false, entities: [], bullets: [], mines: [], particles: [], wrecks: [], over: false, countdown: 0 });
+    if (window.Sound) Sound.stopSpeech();
     setMap(savedMap());
     mySpawn = -1;
     refreshSpawnUi();

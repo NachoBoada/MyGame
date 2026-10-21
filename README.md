@@ -81,7 +81,9 @@ Bots get a random tank each round. To choose which tanks they can use, click **B
 | Restart | `R` (solo only)         |
 | New solo game after a round | `Space` (after a short pause, so a jump key press doesn't skip the results) |
 | Main menu, once your tank is destroyed and only bots are left (solo) | `Esc` |
-| Sound on/off | `M`                |
+| Sound on/off (also the spoken messages) | `M` |
+
+**Messages read aloud.** When your tank is destroyed, or when you win a round, a random message is shown in the banner and on the end screen, and it is also read aloud. The game uses your browser's text-to-speech and picks a Spanish voice (Argentine first) when your device has one; otherwise the device's default voice reads it. `M` turns the spoken messages off along with the other sounds. Some browsers only allow speech after you have clicked on the page, which you always have by the time a round starts.
 
 You need a keyboard and mouse. There are no touch controls, so the game doesn't work on phones or tablets.
 
@@ -107,7 +109,7 @@ Every bullet has the colour of the tank that fired it.
 
 **Mines.** A mine arms 1 second after it is laid, shown by a blinking red light. It destroys any tank except its owner that drives close to it. A Sapper can lay one mine every 2 seconds and keep up to 4 on the field, and laying a fifth removes the oldest. Mines show for everyone and are cleared when the round ends.
 
-A destroyed tank leaves a burnt-out wreck that you can drive over.
+A destroyed tank leaves a burnt-out wreck that you can drive over. Bullets can't pass through a wreck (even a Phantom's, which do pass through walls), so a wreck is a little cover. A bullet fired from a tank standing on a wreck isn't stopped by it.
 
 ### Tips
 
