@@ -4,7 +4,9 @@
 (() => {
   "use strict";
 
-  const ID_PREFIX = "last-one-standing-v1-";
+  // This copy of the game (the /messages/ page) has its own room names, so a room made here
+  // can't be joined from the main page, which would not understand its messages.
+  const ID_PREFIX = "last-one-standing-messages-v1-";
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I/L
   const CODE_LENGTH = 5;
   const JOIN_TIMEOUT_MS = 12000;

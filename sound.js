@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const MUTE_KEY = "last-one-standing-muted";
+  const MUTE_KEY = "last-one-standing-messages-muted";
   let ac = null;
   let master = null; // shots: compressed, then halved
   let direct = null; // other effects: played at their own volume

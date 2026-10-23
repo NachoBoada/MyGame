@@ -241,7 +241,7 @@
     "Tranqui, nadie esperaba nada de vos",
   ];
 
-  const nextDestroyedMessage = messageDeck("last-one-standing-destroyed-deck", DESTROYED_MESSAGES);
+  const nextDestroyedMessage = messageDeck("last-one-standing-messages-destroyed-deck", DESTROYED_MESSAGES);
 
   // One of these is shown, in capitals, when you win a round
   const VICTORY_MESSAGES = [
@@ -251,7 +251,7 @@
     "Felicitaciones pedazo de fracasado, ganaste",
   ];
 
-  const nextVictoryMessage = messageDeck("last-one-standing-victory-deck", VICTORY_MESSAGES);
+  const nextVictoryMessage = messageDeck("last-one-standing-messages-victory-deck", VICTORY_MESSAGES);
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -1350,8 +1350,8 @@
   });
 
   // ---------- Menu and lobby ----------
-  const NAME_KEY = "last-one-standing-name";
-  const MAP_KEY = "last-one-standing-map";
+  const NAME_KEY = "last-one-standing-messages-name";
+  const MAP_KEY = "last-one-standing-messages-map";
 
   // Switch the map being played or previewed, and keep every map selector in sync
   function setMap(id) {
@@ -1371,7 +1371,7 @@
 
   // The number of bots to play with. Like the map, a player's own choice is remembered,
   // while a value received from the host is only shown.
-  const BOTS_KEY = "last-one-standing-bots";
+  const BOTS_KEY = "last-one-standing-messages-bots";
 
   // At most one bot fewer than the map has spawn points, which leaves a spawn point for you
   const maxBots = () => currentMap.spawns.length - 1;
@@ -1484,7 +1484,7 @@
   $("spawn-done").addEventListener("click", closeSpawnPicker);
 
   // ---------- Bot tanks ----------
-  const BOT_TANKS_KEY = "last-one-standing-bot-tanks";
+  const BOT_TANKS_KEY = "last-one-standing-messages-bot-tanks";
   let botTanksReturn = "menu"; // the panel to go back to when the list is closed
 
   function savedBotTanks() {
@@ -1566,7 +1566,7 @@
   refreshBotTanksUi();
 
   // ---------- Tank picker ----------
-  const TANK_KEY = "last-one-standing-tank";
+  const TANK_KEY = "last-one-standing-messages-tank";
   let myTank = 1;
   try { myTank = cleanTank(localStorage.getItem(TANK_KEY)); } catch {}
 
