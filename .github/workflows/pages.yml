@@ -1,0 +1,64 @@
+# Publishes the game to GitHub Pages.
+#   - the `main` branch is served at the root:        https://nachoboada.github.io/MyGame/
+#   - the `extra-features` branch is served at /messages/:  https://nachoboada.github.io/MyGame/messages/
+# Every push to either branch publishes both again.
+name: Publish to GitHub Pages
+
+on:
+  push:
+    branches: [main, extra-features]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Get the main branch (the root page)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+
+      - name: Check that the extra-features branch exists
+        id: messages
+        run: |
+          if git ls-remote --exit-code --heads "${{ github.server_url }}/${{ github.repository }}.git" extra-features > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get the extra-features branch (the /messages/ page)
+        if: steps.messages.outputs.exists == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: extra-features
+          path: site/messages
+
+      - name: Remove files that should not be published
+        run: |
+          rm -rf site/.git site/.github site/messages/.git site/messages/.github
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4

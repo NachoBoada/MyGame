@@ -4,6 +4,8 @@ A top-down tank battle that runs in the browser. Up to 6 players can play online
 
 **Play:** https://nachoboada.github.io/MyGame/
 
+**Newer version, still being tried out:** https://nachoboada.github.io/MyGame/messages/ is the `extra-features` branch. It is a separate copy of the game: rooms made on one page can't be joined from the other, and each page keeps its own saved settings.
+
 ## Play with friends
 
 1. One person opens the game, types a name and clicks **Create online match**. That person is the **host**.
